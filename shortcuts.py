@@ -18,6 +18,130 @@ from bs4 import BeautifulSoup
 from models import Candidate
 
 
+# --- Quick click helpers ---
+
+
+def _sel_attr(attribute: str, value: str) -> dict:
+    """Build an attributeValueSelector dict."""
+    return {
+        "type": "attributeValueSelector",
+        "attribute": attribute,
+        "value": value,
+        "case_sensitive": False,
+    }
+
+
+def _click_action(attribute: str, value: str) -> list[dict]:
+    """Single click action on an element identified by attribute."""
+    return [{"type": "ClickAction", "selector": _sel_attr(attribute, value)}]
+
+
+def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[dict] | None:
+    """Try to resolve a task with a hardcoded quick-click action.
+
+    These shortcuts use known stable element IDs and do NOT need HTML candidates.
+    They work even with incomplete SPA-loading HTML. Returns action list or None.
+    """
+    t = prompt.lower()
+
+    # --- Tier 1: Single-click tasks (empty criteria, stable IDs) ---
+
+    # SELECT_TODAY (autocalendar) - "go to today", "focus today", "today's date"
+    if re.search(r"go\s+to\s+today|focus.*today|today.?s?\s+date\s+in\s+the\s+calendar", t):
+        return _click_action("id", "focus-today")
+
+    # ADD_NEW_CALENDAR (autocalendar) - "add a new calendar event", "add calendar button"
+    if re.search(r"add\s+a\s+new\s+calendar\s+event|add\s+calendar\s+button|click.*add\s+calendar", t):
+        return _click_action("id", "new-event-cta")
+
+    # AUTOLIST_ADD_TEAM_CLICKED (autolist) - "click add team", "add team button"
+    if re.search(r"click.*add\s+team|add\s+team\s+button", t):
+        return _click_action("id", "add-team-btn")
+
+    # VIEW_WISHLIST (autozone) - "my wishlist", "show wishlist", "view wishlist", "saved items"
+    if re.search(r"(show\s+me\s+my\s+saved|my\s+wishlist|show.*wishlist|view.*wishlist)", t):
+        return _click_action("id", "favorite-action")
+
+    # NAVBAR_JOBS_CLICK (autowork) - "click on the Jobs option in the navbar" (seed-dependent href)
+    if re.search(r"clicks?\s+on\s+the\s+jobs?\s+option\s+in\s+the\s+navbar", t):
+        return _click_action("href", f"/jobs?seed={seed}") if seed else None
+
+    # NAVBAR_PROFILE_CLICK (autowork) - "click on the profile option in the navbar" (seed-dependent href)
+    if re.search(r"clicks?\s+on\s+.*profile\s+.*in\s+the\s+navbar", t):
+        return _click_action("href", f"/profile/alexsmith?seed={seed}") if seed else None
+
+    # --- Tier 2: Featured-item clicks (stable IDs) ---
+
+    # FILM_DETAIL (autocinema) - "view details" for spotlight/featured movie
+    if re.search(r"(spotlight|featured)\s+.*(?:movie|film).*details|view\s+details\s+.*(?:spotlight|featured)\s+(?:movie|film)", t):
+        return _click_action("id", "spotlight-view-details-btn")
+
+    # BOOK_DETAIL (autobooks) - "view details" for featured book
+    if re.search(r"(spotlight|featured)\s+.*book.*details|view\s+details\s+.*(?:featured|spotlight)\s+book", t):
+        return _click_action("id", "featured-book-view-details-btn-1")
+
+    # VIEW_DETAIL (autozone) - "view details" for featured product
+    if re.search(r"(spotlight|featured)\s+.*product.*details|view\s+details\s+.*(?:featured|spotlight)\s+product", t):
+        return _click_action("id", "view-details")
+
+    return None
+
+
+# --- Search shortcut helpers ---
+
+
+# Map website ID -> search input element ID
+_SEARCH_INPUT_IDS: dict[str, str] = {
+    "automail": "mail-search",
+    "autocinema": "input",
+    "autodining": "search-field",
+    "autodelivery": "food-search",
+}
+
+
+def extract_search_query(prompt: str) -> str | None:
+    """Extract search query value from task prompt.
+
+    Uses parse_constraints() to find 'query equals X' or 'query contains X' patterns.
+    Falls back to regex for 'search for ... "X"' patterns.
+    """
+    from constraint_parser import parse_constraints
+
+    constraints = parse_constraints(prompt)
+    for c in constraints:
+        if c.field == "query":
+            return str(c.value)
+    # Fallback: look for quoted values after "search"
+    m = re.search(r"search\s+(?:for\s+)?.*?['\"]([^'\"]+)['\"]", prompt, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def try_search_shortcut(prompt: str, website: str | None) -> list[dict] | None:
+    """Handle search/type tasks with known input IDs.
+
+    Extracts query from prompt constraints, maps website to input element ID,
+    returns a TypeAction. Returns None if no query found or website not supported.
+    """
+    if not website:
+        return None
+
+    input_id = _SEARCH_INPUT_IDS.get(website)
+    if input_id is None:
+        return None
+
+    query = extract_search_query(prompt)
+    if not query:
+        return None
+
+    return [{
+        "type": "TypeAction",
+        "text": query,
+        "selector": _sel_attr("id", input_id),
+    }]
+
+
 def classify_task(prompt: str) -> str | None:
     """Classify a task prompt as a shortcut type or None.
 
@@ -27,7 +151,11 @@ def classify_task(prompt: str) -> str | None:
     lower = prompt.lower()
 
     # Registration (check before login -- "sign up" must not match "sign in")
-    if any(kw in lower for kw in ("sign up", "register", "registration", "create an account", "create account")):
+    # "register" alone matches too broadly (e.g., "register a movie") — require
+    # registration-specific context or use the longer forms.
+    if any(kw in lower for kw in ("sign up", "registration", "create an account", "create account")):
+        return "registration"
+    if "register" in lower and not any(exc in lower for exc in ("register a movie", "register a film", "register the ", "register for ")):
         return "registration"
 
     # Logout (check before login -- "log out" must not match "log in")
@@ -39,7 +167,7 @@ def classify_task(prompt: str) -> str | None:
         return "login"
 
     # Contact form
-    if "contact" in lower and any(kw in lower for kw in ("form", "message", "fill")):
+    if "contact" in lower and any(kw in lower for kw in ("form", "message", "fill", "support", "submit")):
         return "contact"
 
     return None

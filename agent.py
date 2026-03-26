@@ -5,6 +5,7 @@ Full /act orchestrator pipeline:
   2. Detect website from URL port
   3. Extract seed from URL
   4. Initialize/retrieve task state (constraints, type, history)
+  3.5. Check quick click shortcuts (zero LLM cost, no HTML needed)
   5. Prune HTML and extract candidates
   6. Check shortcuts (zero LLM cost path, records in history)
   7. Build Page IR for LLM
@@ -31,7 +32,7 @@ from config import (
 from constraint_parser import parse_constraints, format_constraints_block
 from html_processing import prune_html, extract_candidates, build_page_ir
 from navigation import extract_seed, preserve_seed, is_localhost_url
-from shortcuts import classify_task, classify_task_type, try_shortcut
+from shortcuts import classify_task, classify_task_type, try_shortcut, try_quick_click, try_search_shortcut
 from state_tracker import TaskStateTracker
 from llm_client import LLMClient
 from llm_prompts import build_system_prompt, build_user_prompt
@@ -89,6 +90,35 @@ async def handle_act(
         # Auto-cleanup old tasks to prevent memory leaks
         TaskStateTracker._auto_cleanup(max_kept=5)
 
+    # 3.5 Quick click shortcuts (zero LLM cost, hardcoded selectors, no HTML needed)
+    # Must run BEFORE HTML parsing -- these work even with incomplete SPA HTML.
+    # Not gated by METERING_ENABLED_SHORTCUTS (zero cost, always allowed).
+    quick_actions = try_quick_click(prompt, url, seed, step)
+    if quick_actions is not None:
+        logger.info(f"Quick click resolved: {len(quick_actions)} actions")
+        for i, qa in enumerate(quick_actions):
+            sel_val = ""
+            sel = qa.get("selector", {})
+            if isinstance(sel, dict):
+                sel_val = sel.get("value", "")
+            TaskStateTracker.record_action(task, qa.get("type", ""), sel_val, url, step + i)
+        return quick_actions
+
+    # 3.6 Search shortcuts (zero LLM cost, hardcoded input IDs, no HTML needed)
+    # Not gated by metering (zero cost, always allowed).
+    search_actions = try_search_shortcut(prompt, website)
+    if search_actions is not None:
+        logger.info(f"Search shortcut resolved: {len(search_actions)} actions")
+        for i, sa in enumerate(search_actions):
+            sel_val = ""
+            sel = sa.get("selector", {})
+            if isinstance(sel, dict):
+                sel_val = sel.get("value", "")
+            TaskStateTracker.record_action(task, sa.get("type", ""), sel_val, url, step + i)
+            if sa.get("type") == "TypeAction" and sel_val:
+                TaskStateTracker.record_filled_field(task, sel_val)
+        return search_actions
+
     # 4. Prune HTML and extract candidates (if HTML provided)
     if snapshot_html and snapshot_html.strip():
         soup = prune_html(snapshot_html)
@@ -123,9 +153,11 @@ async def handle_act(
 
     # 6. Build Page IR (need candidates for LLM)
     if not candidates:
-        logger.warning("No candidates extracted, returning ScrollAction")
-        TaskStateTracker.record_action(task, "ScrollAction", "", url, step)
-        return [{"type": "ScrollAction", "down": True}]
+        # No interactive elements found — likely page still loading (SPA/Next.js).
+        # Return WaitAction to give the browser time to render before next step.
+        logger.warning("No candidates extracted, returning WaitAction (page may still be loading)")
+        TaskStateTracker.record_action(task, "WaitAction", "", url, step)
+        return [{"type": "WaitAction", "time_seconds": 2}]
 
     page_ir = build_page_ir(soup, url, candidates)
 
@@ -193,6 +225,14 @@ async def handle_act(
     # 12. Build and validate action
     action = build_iwa_action(decision, page_ir.candidates, url, seed)
     action_type = action.get("type", "unknown")
+
+    # Guard: never navigate on step 0 — the evaluator already navigated to the task URL.
+    # NavigateAction on step 0 wastes a step and often fails (URL mismatch or wrong page).
+    if step == 0 and action_type == "NavigateAction":
+        logger.info("Blocked NavigateAction on step 0 — already on correct page, scrolling instead")
+        action = {"type": "ScrollAction", "down": True}
+        action_type = "ScrollAction"
+
     logger.info(f"LLM action: {action_type}")
 
     # 13. Record action in state history

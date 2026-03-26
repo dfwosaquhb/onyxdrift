@@ -61,7 +61,7 @@ WEBSITE_HINTS: dict[str, str] = {
     "autolodge": "Hotel booking site. Search, hotel cards, guest selector, payment methods, reviews, wishlist.",
     "autodelivery": "Food delivery. Restaurant list with pagination, item cart, address management, checkout.",
     "autowork": "Project management. Task boards, team management, role assignment, task creation/editing.",
-    "autoconnect": "Social/professional network. Posts, jobs, profiles, company pages, connections.",
+    "autoconnect": "Social/professional network. Posts, jobs, profiles, company pages, connections. Like buttons have IDs starting with 'post_like_button_p' followed by a number.",
     "autocalendar": "Calendar app. Day/week/month/5-day views, event creation wizard, attendees, search.",
     "autolist": "Task/todo manager. Task lists, team management, priority setting, task creation/deletion.",
     "autodrive": "File storage. File/folder browsing, upload, sharing, search.",
@@ -107,5 +107,5 @@ def detect_website(url: str) -> str | None:
 # Full capability: set METERING_ENABLED = True (default in dev).
 METERING_ENABLED = True
 METERING_ENABLED_SHORTCUTS: list[str] = ['login', 'logout', 'registration', 'contact']
-METERING_ENABLED_WEBSITES: list[str] = ['autocinema', 'autobooks', 'autozone', 'autodining', 'autocrm', 'automail', 'autolodge', 'autodelivery', 'autowork', 'autoconnect']
+METERING_ENABLED_WEBSITES: list[str] = ['autocinema', 'autobooks', 'autozone', 'autodining', 'autocrm', 'automail', 'autolodge', 'autodelivery', 'autowork', 'autoconnect', 'autocalendar', 'autolist', 'autohealth']
 METERING_MAX_LLM_ACTIONS: int = 12

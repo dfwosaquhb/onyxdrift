@@ -50,6 +50,12 @@ def prune_html(html: str) -> BeautifulSoup:
     return soup
 
 
+_CSS_HIDDEN_CLASSES = frozenset({
+    "hidden", "d-none", "invisible", "collapse", "sr-only", "visually-hidden",
+    "offscreen", "screen-reader-only", "display-none",
+})
+
+
 def _is_hidden_or_disabled(element) -> bool:
     """Check if an element should be filtered out (hidden/disabled)."""
     # hidden attribute
@@ -72,10 +78,37 @@ def _is_hidden_or_disabled(element) -> bool:
             return True
         if "visibility:hidden" in style_lower:
             return True
+        if "opacity:0" in style_lower:
+            return True
 
     # aria-hidden="true"
     if element.get("aria-hidden", "").lower() == "true":
         return True
+
+    # CSS class-based hiding (Tailwind, Bootstrap, framework patterns)
+    classes = element.get("class", [])
+    if isinstance(classes, list):
+        class_set = {c.lower() for c in classes}
+    else:
+        class_set = {c.lower() for c in str(classes).split()}
+    if class_set & _CSS_HIDDEN_CLASSES:
+        return True
+
+    # Check parent for hiding classes (one level up only)
+    parent = element.parent
+    if parent and parent.name:
+        parent_classes = parent.get("class", [])
+        if isinstance(parent_classes, list):
+            parent_set = {c.lower() for c in parent_classes}
+        else:
+            parent_set = {c.lower() for c in str(parent_classes).split()}
+        if parent_set & _CSS_HIDDEN_CLASSES:
+            return True
+        parent_style = parent.get("style", "")
+        if parent_style:
+            ps = parent_style.lower().replace(" ", "")
+            if "display:none" in ps or "visibility:hidden" in ps:
+                return True
 
     return False
 
