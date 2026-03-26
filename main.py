@@ -5,7 +5,8 @@ Sandbox runs: uvicorn main:app --host 0.0.0.0 --port $SANDBOX_AGENT_PORT
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from loguru import logger
+import logging
+logger = logging.getLogger(__name__)
 
 from agent import handle_act, WAIT_ACTION
 
