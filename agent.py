@@ -1,4 +1,3 @@
-pass
 from __future__ import annotations
 import logging
 logger = logging.getLogger(__name__)
@@ -15,14 +14,12 @@ WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
 _llm_client = None
 
 def get_llm_client() -> LLMClient:
-    pass
     global _llm_client
     if _llm_client is None:
         _llm_client = LLMClient()
     return _llm_client
 
 async def handle_act(task_id: str | None, prompt: str | None, url: str | None, snapshot_html: str | None, screenshot: str | None, step_index: int | None, web_project_id: str | None) -> list[dict]:
-    pass
     if not prompt or not url:
         logger.warning('Missing prompt or url, returning WaitAction')
         return [WAIT_ACTION]

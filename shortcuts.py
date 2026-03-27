@@ -1,19 +1,15 @@
-pass
 from __future__ import annotations
 import re
 from bs4 import BeautifulSoup
 from models import Candidate
 
 def _sel_attr(attribute: str, value: str) -> dict:
-    pass
     return {'type': 'attributeValueSelector', 'attribute': attribute, 'value': value, 'case_sensitive': False}
 
 def _click_action(attribute: str, value: str) -> list[dict]:
-    pass
     return [{'type': 'ClickAction', 'selector': _sel_attr(attribute, value)}]
 
 def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[dict] | None:
-    pass
     t = prompt.lower()
     if re.search('go\\s+to\\s+today|focus.*today|today.?s?\\s+date\\s+in\\s+the\\s+calendar', t):
         return _click_action('id', 'focus-today')
@@ -50,7 +46,6 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
 _SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'food-search'}
 
 def extract_search_query(prompt: str) -> str | None:
-    pass
     from constraint_parser import parse_constraints
     constraints = parse_constraints(prompt)
     for c in constraints:
@@ -62,7 +57,6 @@ def extract_search_query(prompt: str) -> str | None:
     return None
 
 def try_search_shortcut(prompt: str, website: str | None) -> list[dict] | None:
-    pass
     if not website:
         return None
     input_id = _SEARCH_INPUT_IDS.get(website)
@@ -74,7 +68,6 @@ def try_search_shortcut(prompt: str, website: str | None) -> list[dict] | None:
     return [{'type': 'TypeAction', 'text': query, 'selector': _sel_attr('id', input_id)}]
 
 def classify_task(prompt: str) -> str | None:
-    pass
     lower = prompt.lower()
     if any((kw in lower for kw in ('sign up', 'registration', 'create an account', 'create account'))):
         return 'registration'
@@ -89,7 +82,6 @@ def classify_task(prompt: str) -> str | None:
     return None
 
 def classify_task_type(prompt: str) -> str:
-    pass
     lower = prompt.lower()
     login_keywords = ('log in', 'login', 'sign in')
     continuation_keywords = ('then', 'after', 'once logged', 'and then', 'and add', 'and check', 'and go')
@@ -119,7 +111,6 @@ def classify_task_type(prompt: str) -> str:
     return 'general'
 
 def try_shortcut(task_type: str | None, candidates: list[Candidate], soup: BeautifulSoup, step_index: int) -> list[dict] | None:
-    pass
     if task_type is None:
         return None
     if task_type == 'login':
@@ -135,7 +126,6 @@ def try_shortcut(task_type: str | None, candidates: list[Candidate], soup: Beaut
     return None
 
 def detect_login_fields(candidates: list[Candidate]) -> list[dict] | None:
-    pass
     username_candidate = None
     password_candidate = None
     submit_candidate = None
@@ -157,14 +147,12 @@ def detect_login_fields(candidates: list[Candidate]) -> list[dict] | None:
     return None
 
 def detect_logout_target(candidates: list[Candidate]) -> list[dict] | None:
-    pass
     for c in candidates:
         if c.text and any((kw in c.text.lower() for kw in ('log out', 'logout', 'sign out'))):
             return [{'type': 'ClickAction', 'selector': c.selector.model_dump()}]
     return None
 
 def get_registration_actions(candidates: list[Candidate]) -> list[dict] | None:
-    pass
     username_candidate = None
     email_candidate = None
     password_candidate = None
@@ -205,7 +193,6 @@ def get_registration_actions(candidates: list[Candidate]) -> list[dict] | None:
     return actions
 
 def get_contact_actions(candidates: list[Candidate]) -> list[dict] | None:
-    pass
     name_candidate = None
     email_candidate = None
     message_candidate = None
@@ -232,7 +219,6 @@ def get_contact_actions(candidates: list[Candidate]) -> list[dict] | None:
     return [{'type': 'TypeAction', 'text': 'Test User', 'selector': name_candidate.selector.model_dump()}, {'type': 'TypeAction', 'text': '<signup_email>', 'selector': email_candidate.selector.model_dump()}, {'type': 'TypeAction', 'text': 'Test message', 'selector': message_candidate.selector.model_dump()}, {'type': 'ClickAction', 'selector': submit_candidate.selector.model_dump()}]
 
 def is_already_logged_in(soup: BeautifulSoup) -> bool:
-    pass
     indicators = ['logout', 'log out', 'sign out', 'my profile', 'my account', 'dashboard']
     text = soup.get_text(separator=' ').lower()
     for indicator in indicators:

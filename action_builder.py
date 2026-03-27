@@ -1,4 +1,3 @@
-pass
 from __future__ import annotations
 import json
 import re
@@ -9,7 +8,6 @@ from navigation import preserve_seed, is_localhost_url, normalize_url
 _WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
 
 def parse_llm_response(content: str) -> dict | None:
-    pass
     text = content.strip()
     try:
         return json.loads(text)
@@ -31,7 +29,6 @@ def parse_llm_response(content: str) -> dict | None:
     return None
 
 def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: str, seed: str | None) -> dict:
-    pass
     action_type = decision.get('action', 'wait')
     if action_type in ('click', 'type', 'select_option'):
         candidate_id = decision.get('candidate_id')
@@ -76,7 +73,6 @@ def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: s
     return _WAIT_ACTION
 
 def infer_credentials(text: str, candidate: Candidate) -> str:
-    pass
     if text:
         return text
     if candidate.input_type == 'password':

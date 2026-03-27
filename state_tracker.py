@@ -1,28 +1,23 @@
-pass
 from __future__ import annotations
 from models import ActionRecord, TaskState
 _TASK_STATES: dict[str, TaskState] = {}
 
 class TaskStateTracker:
-    pass
 
     @staticmethod
     def get_or_create(task_id: str) -> TaskState:
-        pass
         if task_id not in _TASK_STATES:
             _TASK_STATES[task_id] = TaskState(task_id=task_id)
         return _TASK_STATES[task_id]
 
     @staticmethod
     def record_action(task_id: str, action_type: str, selector_value: str | None, url: str, step_index: int) -> None:
-        pass
         state = TaskStateTracker.get_or_create(task_id)
         record = ActionRecord(action_type=action_type, selector_value=selector_value or '', url=url, step_index=step_index)
         state.history.append(record)
 
     @staticmethod
     def detect_loop(task_id: str, url: str) -> str | None:
-        pass
         state = _TASK_STATES.get(task_id)
         if not state or len(state.history) < 2:
             return None
@@ -36,7 +31,6 @@ class TaskStateTracker:
 
     @staticmethod
     def detect_stuck(task_id: str, url: str) -> str | None:
-        pass
         state = _TASK_STATES.get(task_id)
         if not state or len(state.history) < 3:
             return None
@@ -49,7 +43,6 @@ class TaskStateTracker:
 
     @staticmethod
     def get_recent_history(task_id: str, count: int=3) -> list[str]:
-        pass
         state = _TASK_STATES.get(task_id)
         if not state:
             return []
@@ -58,29 +51,24 @@ class TaskStateTracker:
 
     @staticmethod
     def record_filled_field(task_id: str, field_name: str) -> None:
-        pass
         state = TaskStateTracker.get_or_create(task_id)
         state.filled_fields.add(field_name)
 
     @staticmethod
     def get_filled_fields(task_id: str) -> set[str]:
-        pass
         state = _TASK_STATES.get(task_id)
         return state.filled_fields if state else set()
 
     @staticmethod
     def cleanup(task_id: str) -> None:
-        pass
         _TASK_STATES.pop(task_id, None)
 
     @staticmethod
     def _auto_cleanup(max_kept: int=5) -> None:
-        pass
         while len(_TASK_STATES) > max_kept:
             oldest_key = next(iter(_TASK_STATES))
             del _TASK_STATES[oldest_key]
 
     @staticmethod
     def _get_all_task_ids() -> list[str]:
-        pass
         return list(_TASK_STATES.keys())

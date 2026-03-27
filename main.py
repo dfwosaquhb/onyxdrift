@@ -1,4 +1,3 @@
-pass
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import logging
@@ -8,12 +7,10 @@ app = FastAPI(title='SN36 Web Agent')
 
 @app.get('/health')
 async def health():
-    pass
     return {'status': 'ok'}
 
 @app.post('/act')
 async def act(request: Request):
-    pass
     try:
         body = await request.json()
     except Exception:
@@ -24,6 +21,5 @@ async def act(request: Request):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    pass
     logger.error(f'Unhandled exception: {type(exc).__name__}: {exc}')
     return JSONResponse(status_code=200, content={'actions': [WAIT_ACTION]})

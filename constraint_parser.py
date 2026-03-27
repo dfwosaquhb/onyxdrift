@@ -1,4 +1,3 @@
-pass
 from __future__ import annotations
 import re
 from models import Constraint
@@ -8,14 +7,12 @@ _NOT_IN_PAT = re.compile('([\\w_]+(?:\\s+[\\w_]+)?)\\s+is\\s+not\\s+one\\s+of\\s
 _IN_PAT = re.compile('([\\w_]+(?:\\s+[\\w_]+)?)\\s+is\\s+one\\s+of\\s+\\[([^\\]]+)\\]', re.IGNORECASE)
 
 def _spans_overlap(new_start: int, new_end: int, used: list[tuple[int, int]]) -> bool:
-    pass
     for (s, e) in used:
         if new_start < e and new_end > s:
             return True
     return False
 
 def parse_constraints(prompt: str) -> list[Constraint]:
-    pass
     constraints: list[Constraint] = []
     seen: set[tuple] = set()
     used_spans: list[tuple[int, int]] = []
@@ -53,7 +50,6 @@ def parse_constraints(prompt: str) -> list[Constraint]:
     return constraints
 
 def format_constraints_block(constraints: list[Constraint]) -> str:
-    pass
     if not constraints:
         return ''
     lines = ['CONSTRAINTS (use these to find the RIGHT item and fill forms correctly):']

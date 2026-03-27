@@ -1,4 +1,3 @@
-pass
 from __future__ import annotations
 from bs4 import BeautifulSoup, Comment
 from config import SELECTOR_PRIORITY, PAGE_IR_CHAR_LIMIT
@@ -8,7 +7,6 @@ INTERACTIVE_CSS = "button, a[href], input:not([type='hidden']), textarea, select
 MAX_TEXT_LEN = 80
 
 def prune_html(html: str) -> BeautifulSoup:
-    pass
     soup = BeautifulSoup(html, 'lxml')
     for tag_name in STRIP_TAGS:
         for tag in soup.find_all(tag_name):
@@ -19,7 +17,6 @@ def prune_html(html: str) -> BeautifulSoup:
 _CSS_HIDDEN_CLASSES = frozenset({'hidden', 'd-none', 'invisible', 'collapse', 'sr-only', 'visually-hidden', 'offscreen', 'screen-reader-only', 'display-none'})
 
 def _is_hidden_or_disabled(element) -> bool:
-    pass
     if element.has_attr('hidden'):
         return True
     if element.has_attr('disabled'):
@@ -61,7 +58,6 @@ def _is_hidden_or_disabled(element) -> bool:
     return False
 
 def _pick_selector(element) -> Selector | None:
-    pass
     for attr in SELECTOR_PRIORITY:
         if attr == 'text':
             text = element.get_text(strip=True)
@@ -74,7 +70,6 @@ def _pick_selector(element) -> Selector | None:
     return None
 
 def extract_candidates(soup: BeautifulSoup) -> list[Candidate]:
-    pass
     candidates: list[Candidate] = []
     index = 0
     for element in soup.select(INTERACTIVE_CSS):
@@ -91,7 +86,6 @@ def extract_candidates(soup: BeautifulSoup) -> list[Candidate]:
     return candidates
 
 def _format_selector_display(selector: Selector) -> str:
-    pass
     if selector.attribute == 'id':
         return f'#{selector.value}'
     elif selector.attribute == 'href':
@@ -112,7 +106,6 @@ def _format_selector_display(selector: Selector) -> str:
         return f'{selector.attribute}="{selector.value}"'
 
 def _format_candidate_line(c: Candidate) -> str:
-    pass
     sel_display = _format_selector_display(c.selector)
     parts = [f'[{c.index}]', c.tag]
     if c.input_type:
@@ -123,7 +116,6 @@ def _format_candidate_line(c: Candidate) -> str:
     return ' '.join(parts)
 
 def extract_page_context(soup: BeautifulSoup, url: str) -> PageContext:
-    pass
     title = ''
     if soup.title and soup.title.string:
         title = soup.title.string.strip()
@@ -137,7 +129,6 @@ def extract_page_context(soup: BeautifulSoup, url: str) -> PageContext:
     return PageContext(url=url, title=title, headings=headings)
 
 def build_page_ir(soup: BeautifulSoup, url: str, candidates: list[Candidate]) -> PageIR:
-    pass
     context = extract_page_context(soup, url)
     lines: list[str] = []
     lines.append(f'URL: {context.url}')

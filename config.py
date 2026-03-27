@@ -1,4 +1,3 @@
-pass
 from __future__ import annotations
 from urllib.parse import urlsplit
 PORT_TO_PROJECT: dict[int, str] = {8000: 'autocinema', 8001: 'autobooks', 8002: 'autozone', 8003: 'autodining', 8004: 'autocrm', 8005: 'automail', 8006: 'autodelivery', 8007: 'autolodge', 8008: 'autoconnect', 8009: 'autowork', 8010: 'autocalendar', 8011: 'autolist', 8012: 'autodrive', 8013: 'autohealth', 8014: 'autostats', 8015: 'autodiscord'}
@@ -12,7 +11,6 @@ WEBSITE_HINTS: dict[str, str] = {'autocinema': 'Movie booking site. Genre filter
 TASK_PLAYBOOKS: dict[str, str] = {'login': 'Typical steps: Find username and password fields, type credentials, click submit/login button.', 'logout': 'Typical steps: Find logout or sign-out link (often in nav or profile menu), click it.', 'registration': 'Typical steps: Find registration form, fill username/email/password fields, click register/submit.', 'contact': 'Typical steps: Find contact form, fill name/email/message, click send/submit.', 'login_then_action': 'Typical steps: 1) Login first (username, password, submit). 2) Then navigate to the target section. 3) Complete the main action.', 'search': 'Typical steps: Find the search input, type the query exactly as specified, submit search.', 'navigate_detail': 'Typical steps: Browse or search for the item, then click on it to open its detail page.', 'filter': 'Typical steps: Find filter controls (dropdown, checkbox), select the criteria, apply the filter.', 'purchase': 'Typical steps: Find the item, click Add to Cart, go to cart/checkout, complete the order.', 'form_fill': 'Typical steps: Find each form field, fill values exactly as specified in constraints, then submit.', 'dropdown_select': 'Typical steps: Find the dropdown/select element, click to open, choose the matching option.', 'data_retrieval': 'Typical steps: Navigate to the relevant section, find the item matching constraints, click to view details.', 'edit': 'Typical steps: Navigate to the item, click Edit, update the specified fields, save/submit.', 'delete': 'Typical steps: Navigate to the item, click Delete/Remove, confirm if prompted.', 'general': 'Analyze the page elements and task prompt carefully. Choose the most direct action to make progress.'}
 
 def detect_website(url: str) -> str | None:
-    pass
     parts = urlsplit(url)
     port = parts.port
     return PORT_TO_PROJECT.get(port) if port else None

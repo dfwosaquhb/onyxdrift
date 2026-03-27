@@ -1,11 +1,9 @@
-pass
 from __future__ import annotations
 from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode, parse_qsl
 _LOCALHOST_HOSTS = {'localhost', '127.0.0.1', '::1'}
 _ALLOWED_SCHEMES = {'http', 'https'}
 
 def extract_seed(url: str) -> str | None:
-    pass
     if not url:
         return None
     parts = urlsplit(url)
@@ -16,7 +14,6 @@ def extract_seed(url: str) -> str | None:
     return None
 
 def preserve_seed(target_url: str, current_url: str) -> str:
-    pass
     seed = extract_seed(current_url)
     if seed is None:
         return target_url
@@ -32,7 +29,6 @@ def preserve_seed(target_url: str, current_url: str) -> str:
     return new_url
 
 def normalize_url(url: str) -> str:
-    pass
     parts = urlsplit(url)
     hostname = parts.hostname
     if hostname and hostname not in _LOCALHOST_HOSTS:
@@ -45,7 +41,6 @@ def normalize_url(url: str) -> str:
     return url
 
 def is_localhost_url(url: str) -> bool:
-    pass
     parts = urlsplit(url)
     if parts.scheme not in _ALLOWED_SCHEMES:
         return False
