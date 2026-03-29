@@ -1,16 +1,20 @@
 from __future__ import annotations
+import json
 import logging
 logger = logging.getLogger(__name__)
 from config import detect_website, WEBSITE_HINTS, TASK_PLAYBOOKS, METERING_ENABLED, METERING_ENABLED_SHORTCUTS, METERING_ENABLED_WEBSITES
 from constraint_parser import parse_constraints, format_constraints_block
-from html_processing import prune_html, extract_candidates, build_page_ir
+from credential_parser import extract_credentials_from_task
+from html_processing import prune_html, extract_candidates, build_page_ir, format_browser_state, build_dom_digest, summarize_html
 from navigation import extract_seed, preserve_seed, is_localhost_url
 from shortcuts import classify_task, classify_task_type, try_shortcut, try_quick_click, try_search_shortcut
 from state_tracker import TaskStateTracker
 from llm_client import LLMClient
-from llm_prompts import build_system_prompt, build_user_prompt
-from action_builder import parse_llm_response, build_iwa_action
+from llm_prompts import build_system_prompt, build_user_prompt, format_evaluator_history, build_structured_hints, build_credentials_block
+from action_builder import parse_llm_response, build_iwa_action, is_tool_request, is_valid_action
+from tools import run_tool, tool_list_cards
 WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
+STEP_CAP = 10
 _llm_client = None
 
 def get_llm_client() -> LLMClient:
@@ -19,18 +23,30 @@ def get_llm_client() -> LLMClient:
         _llm_client = LLMClient()
     return _llm_client
 
-async def handle_act(task_id: str | None, prompt: str | None, url: str | None, snapshot_html: str | None, screenshot: str | None, step_index: int | None, web_project_id: str | None) -> list[dict]:
+def smart_fallback(candidates: list, step: int, url: str, task_id: str) -> list[dict]:
+    if candidates and step < 5:
+        sel_dict = candidates[0].selector.model_dump()
+        TaskStateTracker.record_action(task_id, 'ClickAction', candidates[0].selector.value, url, step)
+        return [{'type': 'ClickAction', 'selector': sel_dict}]
+    TaskStateTracker.record_action(task_id, 'ScrollAction', '', url, step)
+    return [{'type': 'ScrollAction', 'down': True}]
+
+async def handle_act(task_id: str | None, prompt: str | None, url: str | None, snapshot_html: str | None, screenshot: str | None, step_index: int | None, web_project_id: str | None, history: list[dict] | None=None) -> list[dict]:
+    step = step_index or 0
+    task = task_id or 'unknown'
+    if step_index is not None and step_index >= STEP_CAP:
+        logger.info(f'Step cap reached ({step_index} >= {STEP_CAP}), returning empty actions')
+        return []
     if not prompt or not url:
         logger.warning('Missing prompt or url, returning WaitAction')
         return [WAIT_ACTION]
-    step = step_index or 0
-    task = task_id or 'unknown'
     website = web_project_id or detect_website(url)
     seed = extract_seed(url)
     state = TaskStateTracker.get_or_create(task)
     if step == 0:
         state.constraints = parse_constraints(prompt)
-        state.task_type = classify_task_type(prompt)
+        state.task_type = classify_task_type(prompt, website=website, url=url)
+        state.credentials = extract_credentials_from_task(prompt)
         TaskStateTracker._auto_cleanup(max_kept=5)
     quick_actions = try_quick_click(prompt, url, seed, step)
     if quick_actions is not None:
@@ -77,45 +93,98 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
                     TaskStateTracker.record_filled_field(task, sel_val)
             return shortcut_actions
     if not candidates:
-        logger.warning('No candidates extracted, returning WaitAction (page may still be loading)')
-        TaskStateTracker.record_action(task, 'WaitAction', '', url, step)
-        return [{'type': 'WaitAction', 'time_seconds': 2}]
-    page_ir = build_page_ir(soup, url, candidates)
+        logger.warning('No candidates extracted, scrolling to discover content')
+        TaskStateTracker.record_action(task, 'ScrollAction', '', url, step)
+        return [{'type': 'ScrollAction', 'down': True}]
     if METERING_ENABLED and website and (website not in METERING_ENABLED_WEBSITES):
         logger.info(f"Metering: website '{website}' disabled, returning WaitAction")
         return [WAIT_ACTION]
-    page_ir_text = page_ir.raw_text
-    action_history = TaskStateTracker.get_recent_history(task, count=3)
+    prev_candidates = TaskStateTracker.get_prev_candidates(task)
+    browser_state_text = format_browser_state(candidates, prev_candidates=prev_candidates)
+    dom_digest_text = build_dom_digest(soup) if step == 0 else ''
     loop_warning = TaskStateTracker.detect_loop(task, url)
     stuck_warning = TaskStateTracker.detect_stuck(task, url)
-    filled_fields = TaskStateTracker.get_filled_fields(task)
     constraints_block = format_constraints_block(state.constraints)
     website_hint = WEBSITE_HINTS.get(website, '') if website else ''
-    playbook = TASK_PLAYBOOKS.get(state.task_type, TASK_PLAYBOOKS.get('general', ''))
+    playbook = TASK_PLAYBOOKS.get(state.task_type, TASK_PLAYBOOKS.get('GENERAL', ''))
+    page_summary = summarize_html(soup) if soup else ''
+    state_delta = TaskStateTracker.compute_state_delta(task, url, page_summary, dom_digest_text, candidates)
+    (prev_memory, prev_next_goal) = TaskStateTracker.get_memory(task)
+    evaluator_history_text = format_evaluator_history(history)
+    structured_hints_text = build_structured_hints(candidates)
+    credentials_block = build_credentials_block(state.credentials)
+    filled_fields = TaskStateTracker.get_filled_fields(task)
+    filled_fields_text = ', '.join(sorted(filled_fields)) if filled_fields else ''
+    cards_text = ''
+    if step <= 2:
+        cards_result = tool_list_cards(candidates=candidates, max_cards=6, max_text=200)
+        if cards_result.get('ok'):
+            cards_text = json.dumps(cards_result.get('cards', []), ensure_ascii=False)[:600]
+    stuck_hint = ''
     if stuck_warning and step >= 3:
-        recent_actions = state.history[-2:] if len(state.history) >= 2 else []
-        all_scrolls = all((a.action_type == 'ScrollAction' for a in recent_actions)) if recent_actions else False
-        if not all_scrolls:
-            logger.info('Stuck recovery: scrolling to discover new elements')
+        stuck_hint = 'You seem stuck. Try a completely different approach.'
+    if loop_warning:
+        stuck_hint = 'LOOP DETECTED - choose a different element or action type.'
+    if stuck_warning and step >= 3:
+        last_action = state.history[-1] if state.history else None
+        last_was_scroll = last_action and last_action.action_type == 'ScrollAction'
+        if not last_was_scroll:
+            logger.info('Circuit-breaker: stuck detected, forcing ScrollAction')
             TaskStateTracker.record_action(task, 'ScrollAction', '', url, step)
             return [{'type': 'ScrollAction', 'down': True}]
+    action_history_lines = TaskStateTracker.get_recent_history(task, count=5)
+    action_history_text = '\n'.join(action_history_lines) if action_history_lines else ''
     try:
         client = get_llm_client()
         system_prompt = build_system_prompt()
-        user_prompt = build_user_prompt(prompt=prompt, page_ir_text=page_ir_text, step_index=step, action_history=action_history, website=website, website_hint=website_hint, constraints_block=constraints_block, playbook=playbook, loop_warning=loop_warning, stuck_warning=stuck_warning, filled_fields=filled_fields)
+        user_prompt = build_user_prompt(prompt=prompt, browser_state_text=browser_state_text, step_index=step, website=website, website_hint=website_hint, constraints_block=constraints_block, credentials_block=credentials_block, playbook=playbook, page_summary=page_summary, dom_digest_text=dom_digest_text, cards_text=cards_text, structured_hints_text=structured_hints_text, evaluator_history_text=evaluator_history_text, memory=prev_memory, next_goal=prev_next_goal, state_delta=state_delta, stuck_hint=stuck_hint, filled_fields_text=filled_fields_text, action_history_text=action_history_text, task_type=state.task_type, url=url)
         messages = [{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': user_prompt}]
-        llm_response = client.chat(task_id=task, messages=messages)
+        max_tool_calls = 2
+        tool_calls = 0
+        last_decision = {}
+        for _ in range(max_tool_calls + 2):
+            llm_response = client.chat(task_id=task, messages=messages)
+            decision = parse_llm_response(llm_response)
+            if decision is None:
+                messages.append({'role': 'user', 'content': "Your response was not valid JSON. Return a single JSON object with 'action' key."})
+                continue
+            if is_tool_request(decision) and tool_calls < max_tool_calls:
+                tool_name = decision['tool']
+                tool_args = decision.get('args', {})
+                tool_calls += 1
+                result = run_tool(tool_name, tool_args, html=snapshot_html or '', url=url, candidates=candidates)
+                messages.append({'role': 'assistant', 'content': json.dumps({'tool': tool_name, 'args': tool_args})})
+                messages.append({'role': 'user', 'content': f'TOOL_RESULT {tool_name}: {json.dumps(result)}'})
+                continue
+            if is_valid_action(decision, candidates):
+                last_decision = decision
+                break
+            n_cand = len(candidates)
+            messages.append({'role': 'assistant', 'content': json.dumps(decision) if decision else '{}'})
+            messages.append({'role': 'user', 'content': f"Invalid JSON. 'action' must be click/type/select/send_keys/navigate/scroll_down/scroll_up/done. candidate_id must be 0-{n_cand - 1}. Return valid JSON."})
+            retry_response = client.chat(task_id=task, messages=messages)
+            retry_decision = parse_llm_response(retry_response)
+            if retry_decision and is_valid_action(retry_decision, candidates):
+                last_decision = retry_decision
+                break
+            last_decision = retry_decision or decision
+            break
+        if isinstance(last_decision, dict):
+            mem = last_decision.get('memory')
+            ng = last_decision.get('next_goal')
+            if isinstance(mem, str) or isinstance(ng, str):
+                TaskStateTracker.store_memory(task, mem if isinstance(mem, str) else '', ng if isinstance(ng, str) else '')
     except Exception as e:
         logger.error(f'LLM call failed: {e}')
-        return [WAIT_ACTION]
-    decision = parse_llm_response(llm_response)
-    if decision is None:
-        logger.warning(f'Failed to parse LLM response: {llm_response[:200]}')
-        return [WAIT_ACTION]
-    action = build_iwa_action(decision, page_ir.candidates, url, seed)
+        return smart_fallback(candidates, step, url, task)
+    if not last_decision or not isinstance(last_decision, dict):
+        return smart_fallback(candidates, step, url, task)
+    action = build_iwa_action(last_decision, candidates, url, seed)
+    if action.get('type') == '__invalid__':
+        return smart_fallback(candidates, step, url, task)
     action_type = action.get('type', 'unknown')
     if step == 0 and action_type == 'NavigateAction':
-        logger.info('Blocked NavigateAction on step 0 — already on correct page, scrolling instead')
+        logger.info('Blocked NavigateAction on step 0 -- already on correct page, scrolling instead')
         action = {'type': 'ScrollAction', 'down': True}
         action_type = 'ScrollAction'
     logger.info(f'LLM action: {action_type}')
@@ -126,4 +195,5 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
     TaskStateTracker.record_action(task, action_type, selector_value, url, step)
     if action_type == 'TypeAction' and selector_value:
         TaskStateTracker.record_filled_field(task, selector_value)
+    TaskStateTracker.store_prev_candidates(task, candidates)
     return [action]

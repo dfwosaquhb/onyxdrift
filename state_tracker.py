@@ -60,6 +60,57 @@ class TaskStateTracker:
         return state.filled_fields if state else set()
 
     @staticmethod
+    def store_prev_candidates(task_id: str, candidates: list) -> None:
+        state = TaskStateTracker.get_or_create(task_id)
+        state.prev_candidates = candidates
+
+    @staticmethod
+    def get_prev_candidates(task_id: str) -> list | None:
+        state = _TASK_STATES.get(task_id)
+        return state.prev_candidates if state else None
+
+    @staticmethod
+    def store_memory(task_id: str, memory, next_goal) -> None:
+        state = TaskStateTracker.get_or_create(task_id)
+        state.memory = memory if isinstance(memory, str) else ''
+        state.next_goal = next_goal if isinstance(next_goal, str) else ''
+
+    @staticmethod
+    def get_memory(task_id: str) -> tuple[str, str]:
+        state = _TASK_STATES.get(task_id)
+        if state is None:
+            return ('', '')
+        return (state.memory, state.next_goal)
+
+    @staticmethod
+    def compute_state_delta(task_id: str, url: str, page_summary: str, dom_digest: str, candidates: list) -> str:
+        state = TaskStateTracker.get_or_create(task_id)
+        cur_sig_set: set[str] = set()
+        for c in (candidates or [])[:30]:
+            try:
+                sel_val = c.selector.value if hasattr(c, 'selector') and hasattr(c.selector, 'value') else ''
+                txt = (c.text or '')[:80] if hasattr(c, 'text') else ''
+                cur_sig_set.add(f'{sel_val}|{txt}')
+            except Exception:
+                continue
+        url_changed = state.prev_url != url if state.prev_url else 'unknown'
+        summary_changed = state.prev_summary != page_summary if state.prev_summary else 'unknown'
+        digest_changed = state.prev_digest != dom_digest if state.prev_digest else 'unknown'
+        if state.prev_sig_set:
+            added = len(cur_sig_set - state.prev_sig_set)
+            removed = len(state.prev_sig_set - cur_sig_set)
+            unchanged = len(cur_sig_set & state.prev_sig_set)
+        else:
+            added = len(cur_sig_set)
+            removed = 0
+            unchanged = 0
+        state.prev_url = url
+        state.prev_summary = page_summary
+        state.prev_digest = dom_digest
+        state.prev_sig_set = cur_sig_set
+        return f'url_changed={url_changed}, +{added} new, -{removed} removed, {unchanged} unchanged'
+
+    @staticmethod
     def cleanup(task_id: str) -> None:
         _TASK_STATES.pop(task_id, None)
 

@@ -18,6 +18,10 @@ class Candidate(BaseModel):
     placeholder: str | None = None
     href: str | None = None
     role: str | None = None
+    group: str = 'PAGE'
+    container_chain: list[str] = []
+    context: str = ''
+    options: list[str] = []
 
 class PageContext(BaseModel):
     url: str
@@ -46,4 +50,12 @@ class TaskState(BaseModel):
     filled_fields: set[str] = set()
     constraints: list[Constraint] = []
     task_type: str = 'general'
+    credentials: dict[str, str] = {}
+    prev_candidates: list | None = None
+    memory: str = ''
+    next_goal: str = ''
+    prev_url: str = ''
+    prev_summary: str = ''
+    prev_digest: str = ''
+    prev_sig_set: set[str] = set()
     model_config = {'arbitrary_types_allowed': True}
