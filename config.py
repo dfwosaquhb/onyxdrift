@@ -16,5 +16,5 @@ def detect_website(url: str) -> str | None:
     return PORT_TO_PROJECT.get(port) if port else None
 METERING_ENABLED = True
 METERING_ENABLED_SHORTCUTS: list[str] = ['login', 'logout', 'registration', 'contact']
-METERING_ENABLED_WEBSITES: list[str] = ['autocinema', 'autobooks', 'autozone', 'autodining', 'autocrm', 'automail', 'autolodge', 'autodelivery', 'autowork', 'autoconnect', 'autocalendar', 'autolist', 'autohealth']
+METERING_ENABLED_WEBSITES: list[str] = ['autocinema', 'autobooks', 'autozone', 'autodining', 'autocrm', 'automail', 'autolodge', 'autodelivery', 'autowork', 'autoconnect', 'autocalendar', 'autolist', 'autohealth', 'autodrive', 'autostats']
 METERING_MAX_LLM_ACTIONS: int = 12

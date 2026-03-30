@@ -50,6 +50,19 @@ class TaskStateTracker:
         return [f"Step {r.step_index}: {r.action_type} on '{r.selector_value}' at {r.url}" for r in recent]
 
     @staticmethod
+    def count_consecutive_wait_actions(task_id: str) -> int:
+        state = _TASK_STATES.get(task_id)
+        if not state or not state.history:
+            return 0
+        count = 0
+        for record in reversed(state.history):
+            if record.action_type == 'WaitAction':
+                count += 1
+            else:
+                break
+        return count
+
+    @staticmethod
     def record_filled_field(task_id: str, field_name: str) -> None:
         state = TaskStateTracker.get_or_create(task_id)
         state.filled_fields.add(field_name)

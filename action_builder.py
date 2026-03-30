@@ -8,6 +8,16 @@ from navigation import preserve_seed, is_localhost_url, normalize_url
 _WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
 _INVALID_ACTION = {'type': '__invalid__'}
 
+def _is_navigable_href(href: str) -> bool:
+    if not href or not href.strip():
+        return False
+    h = href.strip()
+    if not h.startswith('/'):
+        return False
+    if h.startswith('/#') or 'javascript:' in h.lower():
+        return False
+    return True
+
 def is_tool_request(decision: dict | None) -> bool:
     if not decision or not isinstance(decision, dict):
         return False
@@ -59,7 +69,7 @@ def parse_llm_response(content: str) -> dict | None:
 def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: str, seed: str | None) -> dict:
     action_type = decision.get('action', 'wait')
     if action_type == 'done':
-        return {'type': 'ScrollAction', 'down': True}
+        return []
     if action_type in ('click', 'type', 'select_option', 'select'):
         candidate_id = decision.get('candidate_id')
         if candidate_id is None or not isinstance(candidate_id, int):
@@ -71,6 +81,16 @@ def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: s
         candidate = candidates[candidate_id]
         selector_dict = candidate.selector.model_dump()
         if action_type == 'click':
+            if candidate.href and _is_navigable_href(candidate.href):
+                from urllib.parse import urljoin, urlsplit
+                full_url = urljoin(current_url, candidate.href)
+                if is_localhost_url(full_url):
+                    final_url = preserve_seed(full_url, current_url)
+                    current_parts = urlsplit(current_url)
+                    final_parts = urlsplit(final_url)
+                    if not (current_parts.path == final_parts.path and current_parts.query == final_parts.query):
+                        logger.info(f"OJO-01: Click on <a href='{candidate.href}'> -> NavigateAction")
+                        return {'type': 'NavigateAction', 'url': final_url}
             return {'type': 'ClickAction', 'selector': selector_dict}
         if action_type == 'type':
             text = decision.get('text', decision.get('value', ''))

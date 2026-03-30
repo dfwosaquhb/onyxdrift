@@ -47,7 +47,13 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
         state.constraints = parse_constraints(prompt)
         state.task_type = classify_task_type(prompt, website=website, url=url)
         state.credentials = extract_credentials_from_task(prompt)
+        for c in state.constraints:
+            if c.operator == 'equals' and isinstance(c.value, str):
+                state.credentials.setdefault(c.field, c.value)
         TaskStateTracker._auto_cleanup(max_kept=5)
+    if step > 0 and TaskStateTracker.count_consecutive_wait_actions(task) >= 2:
+        logger.info('OJO-05: 2+ consecutive WaitActions, returning empty actions (done)')
+        return []
     quick_actions = try_quick_click(prompt, url, seed, step)
     if quick_actions is not None:
         logger.info(f'Quick click resolved: {len(quick_actions)} actions')
@@ -180,6 +186,9 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
     if not last_decision or not isinstance(last_decision, dict):
         return smart_fallback(candidates, step, url, task)
     action = build_iwa_action(last_decision, candidates, url, seed)
+    if isinstance(action, list) and len(action) == 0:
+        logger.info('LLM signaled done -- returning empty actions for early exit')
+        return []
     if action.get('type') == '__invalid__':
         return smart_fallback(candidates, step, url, task)
     action_type = action.get('type', 'unknown')

@@ -18,11 +18,17 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if re.search('click.*add\\s+team|add\\s+team\\s+button', t):
         return _click_action('id', 'add-team-btn')
     if re.search('(show\\s+me\\s+my\\s+saved|my\\s+wishlist|show.*wishlist|view.*wishlist)', t):
-        return _click_action('id', 'favorite-action')
+        return _click_action('id', 'save-item')
+    if re.search('change\\s+the\\s+application\\s+theme', t):
+        return _click_action('id', 'theme-dark-btn')
     if re.search('clicks?\\s+on\\s+the\\s+jobs?\\s+option\\s+in\\s+the\\s+navbar', t):
         return _click_action('href', f'/jobs?seed={seed}') if seed else None
     if re.search('clicks?\\s+on\\s+.*profile\\s+.*in\\s+the\\s+navbar', t):
         return _click_action('href', f'/profile/alexsmith?seed={seed}') if seed else None
+    if re.search('clicks?\\s+favorites?\\s+to\\s+view|open\\s+the\\s+favorites?\\s+section|navbar.*favorites?|favorites?.*navbar', t):
+        return _click_action('href', f'/favorites?seed={seed}') if seed else None
+    if re.search('clicks?\\s+hire\\s+later\\s+to\\s+view|open\\s+the\\s+hire\\s+later\\s+section|navbar.*hire.?later|hire.?later.*navbar', t):
+        return _click_action('href', f'/hire-later?seed={seed}') if seed else None
     if re.search('(spotlight|featured)\\s+.*(?:movie|film).*details|view\\s+details\\s+.*(?:spotlight|featured)\\s+(?:movie|film)', t):
         return _click_action('id', 'spotlight-view-details-btn')
     if re.search('(spotlight|featured)\\s+.*book.*details|view\\s+details\\s+.*(?:featured|spotlight)\\s+book', t):
@@ -33,8 +39,14 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     _port = urlsplit(url).port
     if _port == 8008 and re.search('go\\s+to\\s+the\\s+home\\s+tab|home\\s+tab\\s+from\\s+the\\s+navbar', t):
         return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': '//header//nav/a[1]'}}]
+    if re.search('(open\\s+my\\s+saved\\s+posts|view\\s+.*saved\\s+(items|posts))', t):
+        return [{'type': 'ClickAction', 'selector': {'type': 'tagContainsSelector', 'value': 'Saved'}}]
+    if re.search('(show\\s+my\\s+applied\\s+jobs|view\\s+.*applied\\s+to)', t):
+        return [{'type': 'ClickAction', 'selector': {'type': 'tagContainsSelector', 'value': 'Applied'}}]
     if re.search('clear\\s+(the\\s+)?(current\\s+)?selection', t):
         return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//button[@role='checkbox'])[1]"}}]
+    if re.search('open\\s+the\\s+contact\\s+page', t):
+        return _click_action('id', 'nav-contact')
     if re.search('about\\s+page.*feature|feature.*about\\s+page', t):
         if step == 0:
             return _click_action('id', 'nav-about')
@@ -42,84 +54,16 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
             return [{'type': 'ScrollAction', 'down': True}]
         else:
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//h3[contains(text(),'Curated')]"}}]
-    if re.search('contact\\s+(an?\\s+)?expert', t):
-        port = urlsplit(url).port or 8009
-        if step == 0:
-            nav_url = f'http://localhost:{port}/expert/alexa-r'
-            if seed:
-                nav_url += f'?seed={seed}'
-            return [{'type': 'NavigateAction', 'url': nav_url}]
-        elif step == 1:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(@id,'contact') or contains(@id,'message')]"}}]
-        return None
-    m_year = re.search('filter\\s+movies?\\s+.*?year\\s+[\'\\"]?(\\d{4})', t)
-    if m_year:
-        year_val = m_year.group(1)
-        port = urlsplit(url).port or 8000
-        if step == 0:
-            nav_url = f'http://localhost:{port}/search'
-            if seed:
-                nav_url += f'?seed={seed}'
-            return [{'type': 'NavigateAction', 'url': nav_url}]
-        elif step == 1:
-            return [{'type': 'SelectAction', 'value': year_val, 'selector': {'type': 'xpathSelector', 'value': "//select[option[text()='All years']]"}}]
-        return None
-    if re.search('expand\\s+.*section\\s+on\\s+the\\s+product|explore\\s+further.*product', t):
-        port = urlsplit(url).port or 8002
-        if step == 0:
-            nav_url = f'http://localhost:{port}/1'
-            if seed:
-                nav_url += f'?seed={seed}'
-            return [{'type': 'NavigateAction', 'url': nav_url}]
-        elif step == 1:
-            return [{'type': 'ScrollAction', 'down': True}]
-        elif step == 2:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(@id,'toggle') or contains(@id,'switch')]"}}]
-        return None
-    if re.search('edit\\s+profile\\s+where', t):
-        port = urlsplit(url).port or 8008
-        if step == 0:
-            nav_url = f'http://localhost:{port}/profile/me'
-            if seed:
-                nav_url += f'?seed={seed}'
-            return [{'type': 'NavigateAction', 'url': nav_url}]
-        elif step == 1:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(text(),'Edit') or contains(text(),'Modify')]"}}]
-        elif step == 2:
-            return [{'type': 'TypeAction', 'text': 'profile updated', 'selector': {'type': 'xpathSelector', 'value': "(//input[contains(@class,'border')])[3]"}}]
-        elif step == 3:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(text(),'Save')]"}}]
-        return None
+    if re.search('go\\s+back\\s+to\\s+(the\\s+)?(all\\s+)?hotels|return\\s+to\\s+.*hotel\\s+(dashboard|listing)', t):
+        return [{'type': 'ClickAction', 'selector': {'type': 'tagContainsSelector', 'value': 'All Hotels'}}]
     if re.search('select\\s+(the\\s+)?calendar\\s+(whose|where|that|named)', t):
         if step == 0:
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//input[contains(@aria-label,'calendar')])[1]"}}]
         elif step == 1:
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//input[contains(@aria-label,'calendar')])[1]"}}]
         return None
-    if re.search('(retrieve|show|get)\\s+details\\s+.*doctor\\s+reviews', t):
-        port = urlsplit(url).port or 8013
-        if step == 0:
-            nav_url = f'http://localhost:{port}/doctors/1'
-            if seed:
-                nav_url += f'?seed={seed}'
-            return [{'type': 'NavigateAction', 'url': nav_url}]
-        elif step == 1:
-            return [{'type': 'ScrollAction', 'down': True}]
-        elif step == 2:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(text(),'Review') or contains(text(),'review')]"}}]
-        elif step == 3:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//button[contains(@aria-label,'star') or contains(@aria-label,'rating') or contains(@class,'star') or contains(@class,'rating')])[1]"}}]
-        return None
-    if re.search('click.*cell.*month\\s+view.*on\\s+or\\s+before', t, re.IGNORECASE):
-        if step == 0:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(@aria-label,'view') or contains(text(),'days') or contains(text(),'Week') or contains(text(),'Day')]"}}]
-        elif step == 1:
-            return [{'type': 'ClickAction', 'selector': {'type': 'tagContainsSelector', 'value': 'Month'}}]
-        elif step == 2:
-            return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//button[contains(@aria-label,'February')]"}}]
-        return None
     return None
-_SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'food-search'}
+_SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'filter-input'}
 
 def extract_search_query(prompt: str) -> str | None:
     from constraint_parser import parse_constraints
@@ -159,6 +103,26 @@ def classify_task(prompt: str) -> str | None:
 
 def classify_task_type(prompt: str, website: str | None=None, url: str | None=None) -> str:
     t = (prompt or '').lower()
+    if website == 'autostats' and re.search('(add|star|favorite)\\s+.*\\bto\\s+favorites?\\b|favorite\\s+.*subnet', t, re.IGNORECASE):
+        return 'FAVORITE_SUBNET'
+    if website == 'autostats' and re.search('(send|transfer)\\s+\\d+\\s*(tao|tau|to\\s)', t, re.IGNORECASE):
+        return 'TRANSFER_COMPLETE'
+    if website == 'autostats' and re.search('disconnect\\s+(your\\s+)?wallet', t, re.IGNORECASE):
+        return 'DISCONNECT_WALLET'
+    if website == 'autostats' and re.search('connect\\s+(your\\s+)?wallet|connect\\s+with\\s+(polkadot|talisman|subwallet)', t, re.IGNORECASE):
+        return 'CONNECT_WALLET_STATS'
+    if website == 'autostats' and re.search('buy\\s+\\d+\\s*(tao|tau|alpha)', t, re.IGNORECASE):
+        return 'EXECUTE_BUY'
+    if website == 'autostats' and re.search('sell\\s+\\d+\\s*(alpha|tao|tau)', t, re.IGNORECASE):
+        return 'EXECUTE_SELL'
+    if website == 'autostats' and re.search('view\\s+(a\\s+)?subnet', t, re.IGNORECASE):
+        return 'VIEW_SUBNET'
+    if website == 'autostats' and re.search('view\\s+(a\\s+)?validator', t, re.IGNORECASE):
+        return 'VIEW_VALIDATOR'
+    if website == 'autostats' and re.search('view\\s+(a\\s+)?block', t, re.IGNORECASE):
+        return 'VIEW_BLOCK'
+    if website == 'autostats' and re.search('view\\s+(an?\\s+)?account', t, re.IGNORECASE):
+        return 'VIEW_ACCOUNT'
     if re.search('(enter|type)\\s+destination', t, re.IGNORECASE):
         return 'ENTER_DESTINATION'
     if re.search('destination\\s+(value\\s+)?that\\s+is\\s+NOT', t, re.IGNORECASE):
@@ -187,6 +151,16 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'SELECT_TIME'
     if re.search('next\\s+pickup', t, re.IGNORECASE):
         return 'NEXT_PICKUP'
+    if re.search('(view|navigate\\s+to)\\s+(the\\s+)?templates', t, re.IGNORECASE):
+        return 'VIEW_TEMPLATES'
+    if re.search('edit\\s+the\\s+template\\s+body', t, re.IGNORECASE):
+        return 'TEMPLATE_BODY_EDITED'
+    if re.search('cancel\\s+(the\\s+)?template', t, re.IGNORECASE):
+        return 'TEMPLATE_CANCELED'
+    if re.search('save\\s+(the\\s+)?email\\s+as\\s+(a\\s+)?draft', t, re.IGNORECASE):
+        return 'EMAIL_SAVE_AS_DRAFT'
+    if re.search('reply\\s+to\\s+the\\s+email', t, re.IGNORECASE):
+        return 'REPLY_EMAIL'
     if re.search('mark\\s+as\\s+spam', t, re.IGNORECASE):
         return 'MARK_AS_SPAM'
     if re.search('(mark|move)\\s+.*(spam|junk)', t, re.IGNORECASE):
@@ -223,6 +197,10 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'TEMPLATE_SAVED_DRAFT'
     if re.search('select\\s+the\\s+template', t, re.IGNORECASE):
         return 'TEMPLATE_SELECTED'
+    if re.search('add\\s+(a\\s+)?\\d+.?minute\\s+reminder|add\\s+a\\s+reminder\\s+.*event|set\\s+a\\s+reminder', t, re.IGNORECASE):
+        return 'EVENT_ADD_REMINDER'
+    if re.search('remove\\s+(the\\s+)?\\d+.?minute\\s+reminder|remove\\s+(a\\s+)?reminder\\s+from|delete\\s+the\\s+reminder', t, re.IGNORECASE):
+        return 'EVENT_REMOVE_REMINDER'
     if re.search('switch\\s+to\\s+week\\s+view', t, re.IGNORECASE):
         return 'SELECT_WEEK'
     if re.search('switch\\s+to\\s+month\\s+view', t, re.IGNORECASE):
@@ -277,6 +255,10 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'AUTOLIST_TASK_ADDED'
     if re.search('add\\s+a\\s+task\\s+where', t, re.IGNORECASE):
         return 'AUTOLIST_TASK_ADDED'
+    if re.search('book\\s+an?\\s+appointment\\s+where', t, re.IGNORECASE):
+        return 'APPOINTMENT_BOOKED_SUCCESSFULLY'
+    if re.search('search\\s+(for\\s+)?prescriptions?\\s+where', t, re.IGNORECASE):
+        return 'SEARCH_PRESCRIPTION'
     if re.search('(show|retrieve)\\s+details\\s+(for\\s+a\\s+doctor|of\\s+the\\s+doctor\\s+education|of\\s+a\\s+doctor)', t, re.IGNORECASE):
         if re.search('education|certif', t, re.IGNORECASE):
             return 'VIEW_DOCTOR_EDUCATION'
@@ -333,6 +315,60 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'APPLY_FOR_JOB'
     if re.search('edit\\s+profile\\s+to\\s+set\\s+the\\s+bio', t, re.IGNORECASE):
         return 'EDIT_PROFILE_BIO'
+    if re.search('like\\s+the\\s+post', t, re.IGNORECASE):
+        return 'LIKE_POST'
+    if re.search('unhide\\s+the\\s+post', t, re.IGNORECASE):
+        return 'UNHIDE_POST'
+    if re.search('hide\\s+the\\s+post', t, re.IGNORECASE):
+        return 'HIDE_POST'
+    if re.search('view\\s+(the\\s+)?profile\\s+of\\s+user', t, re.IGNORECASE):
+        return 'VIEW_USER_PROFILE'
+    if re.search('connect\\s+with\\s+', t, re.IGNORECASE):
+        return 'CONNECT_WITH_USER'
+    if re.search('view\\s+the\\s+job\\s+where', t, re.IGNORECASE):
+        return 'VIEW_JOB'
+    if re.search('filter\\s+jobs', t, re.IGNORECASE):
+        return 'FILTER_JOBS'
+    if re.search('(open\\s+my\\s+saved\\s+posts|view\\s+.*saved\\s+(items|posts))', t, re.IGNORECASE):
+        return 'VIEW_SAVED_POSTS'
+    if re.search('(show\\s+my\\s+applied\\s+jobs|view\\s+.*applied\\s+to)', t, re.IGNORECASE):
+        return 'VIEW_APPLIED_JOBS'
+    if re.search('edit\\s+experience', t, re.IGNORECASE):
+        return 'EDIT_EXPERIENCE'
+    if re.search('add\\s+(new\\s+)?experience', t, re.IGNORECASE):
+        return 'ADD_EXPERIENCE'
+    if re.search('book\\s+a\\s+consultation', t, re.IGNORECASE):
+        return 'BOOK_A_CONSULTATION'
+    if re.search('quick\\s+hire', t, re.IGNORECASE):
+        return 'QUICK_HIRE'
+    if re.search('confirm\\s+hiring\\s+of\\s+a\\s+consultation', t, re.IGNORECASE):
+        return 'HIRE_CONSULTANT'
+    if re.search('cancel\\s+hiring\\s+of\\s+a\\s+consultation', t, re.IGNORECASE):
+        return 'CANCEL_HIRE'
+    if re.search('choose\\s+.*budget\\s+type', t, re.IGNORECASE):
+        return 'CHOOSE_BUDGET_TYPE'
+    if re.search('choose\\s+.*timeline', t, re.IGNORECASE):
+        return 'CHOOSE_PROJECT_TIMELINE'
+    if re.search('set\\s+hourly\\s+rate', t, re.IGNORECASE):
+        return 'SET_RATE_RANGE'
+    if re.search('write\\s+a\\s+job\\s+description', t, re.IGNORECASE):
+        return 'WRITE_JOB_DESCRIPTION'
+    if re.search('send\\s+a\\s+message\\s+to\\s+an?\\s+expert', t, re.IGNORECASE):
+        return 'CONTACT_EXPERT_MSG_SENT'
+    if re.search('contact\\s+an?\\s+expert\\s+where', t, re.IGNORECASE):
+        return 'CONTACT_EXPERT_OPENED'
+    if re.search('edit\\s+profile\\s+name', t, re.IGNORECASE):
+        return 'EDIT_PROFILE_NAME'
+    if re.search('browse\\s+.*favorite\\s+expert', t, re.IGNORECASE):
+        return 'BROWSE_FAVORITE_EXPERT'
+    if re.search('select\\s+favorite\\s+expert', t, re.IGNORECASE):
+        return 'FAVORITE_EXPERT_SELECTED'
+    if re.search('remove\\s+favorite\\s+expert', t, re.IGNORECASE):
+        return 'FAVORITE_EXPERT_REMOVED'
+    if re.search('(clicks?\\s+favorites?\\s+to\\s+view|open\\s+the\\s+favorites?\\s+section|navbar.*favorites?|favorites?.*navbar)', t, re.IGNORECASE):
+        return 'NAVBAR_FAVORITES_CLICK'
+    if re.search('(clicks?\\s+hire\\s+later\\s+to\\s+view|open\\s+the\\s+hire\\s+later\\s+section|navbar.*hire.?later|hire.?later.*navbar)', t, re.IGNORECASE):
+        return 'NAVBAR_HIRE_LATER_CLICK'
     if re.search('decide\\s+to\\s+remove\\s+expert\\s+from\\s+hire\\s+later', t, re.IGNORECASE):
         return 'HIRE_LATER_REMOVED'
     if re.search('decide\\s+to\\s+hire\\s+later', t, re.IGNORECASE):
@@ -365,10 +401,18 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'EDIT_PROFILE_EMAIL'
     if re.search('edit\\s+profile\\s+email', t, re.IGNORECASE):
         return 'EDIT_PROFILE_EMAIL'
+    if re.search('(view|show)\\s+the\\s+hotel\\s+where', t, re.IGNORECASE):
+        return 'VIEW_HOTEL'
+    if re.search('go\\s+back\\s+to\\s+(the\\s+)?(all\\s+)?hotels|return\\s+to\\s+.*hotel\\s+(dashboard|listing)', t, re.IGNORECASE):
+        return 'BACK_TO_ALL_HOTELS'
+    if re.search('book\\s+.*from\\s+(my\\s+)?wishlist|book\\s+.*saved\\s+in\\s+wishlist', t, re.IGNORECASE):
+        return 'BOOK_FROM_WISHLIST'
     if re.search('confirm\\s+the\\s+booking', t, re.IGNORECASE):
         return 'BOOKING_CONFIRM'
     if re.search('(adjust|set|change)\\s+the\\s+number\\s+of\\s+guests', t, re.IGNORECASE):
         return 'EDIT_NUMBER_OF_GUESTS'
+    if re.search('select\\s+people\\s+(equals|not|greater|less)', t, re.IGNORECASE):
+        return 'PEOPLE_SELECTED'
     if re.search('(open\\s+)?guest\\s+selector\\s+dropdown', t, re.IGNORECASE):
         return 'PEOPLE_DROPDOWN_OPENED'
     if re.search('select\\s+(a\\s+)?payment\\s+method', t, re.IGNORECASE):
@@ -387,6 +431,10 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'ADD_TO_WISHLIST_HOTEL'
     if re.search('apply.*filter.*hotel|show\\s+details\\s+for\\s+hotels', t, re.IGNORECASE):
         return 'APPLY_FILTERS'
+    if re.search('(empty|clear)\\s+(my\\s+)?cart|remove\\s+all\\s+items\\s+from\\s+(my\\s+)?cart', t, re.IGNORECASE):
+        return 'EMPTY_CART'
+    if re.search('place\\s+(the\\s+)?order', t, re.IGNORECASE):
+        return 'PLACE_ORDER'
     if re.search('(next|show\\s+me\\s+the\\s+next)\\s+set\\s+of\\s+restaurants', t, re.IGNORECASE):
         return 'RESTAURANT_NEXT_PAGE'
     if re.search('go\\s+back\\s+to\\s+the\\s+previous\\s+page\\s+of\\s+restaurants', t, re.IGNORECASE):
@@ -397,6 +445,8 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'ITEM_INCREMENTED'
     if re.search('search\\s+for\\s+restaurants?\\s+(where|that)', t, re.IGNORECASE):
         return 'SEARCH_DELIVERY_RESTAURANT'
+    if re.search('submit\\s+a\\s+review\\s+for\\s+restaurant', t, re.IGNORECASE):
+        return 'REVIEW_CREATED'
     if re.search('submit\\s+(a\\s+)?review\\s+for\\s+(a\\s+)?restaurant', t, re.IGNORECASE):
         return 'REVIEW_SUBMITTED'
     if re.search('add\\s+an?\\s+address\\s+that\\s+is', t, re.IGNORECASE):
@@ -411,6 +461,26 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'VIEW_ALL_RESTAURANTS'
     if re.search('(go\\s+to\\s+)?checkout\\s+and\\s+show\\s+the\\s+order', t, re.IGNORECASE):
         return 'OPEN_CHECKOUT_PAGE'
+    if re.search('(show|view|display)\\s+.*full\\s+menu', t, re.IGNORECASE):
+        return 'VIEW_FULL_MENU'
+    if re.search('(select|remove)\\s+the\\s+tag\\s+filter', t, re.IGNORECASE):
+        return 'TAG_FILTER_SELECTED'
+    if re.search('(reservation\\s+is\\s+for\\s+a\\s+|occasion\\s+type|as\\s+the\\s+occasion)', t, re.IGNORECASE):
+        return 'OCCASION_SELECTED'
+    if re.search('select\\s+(the\\s+)?date\\s+[\'\\"]', t, re.IGNORECASE):
+        return 'DATE_SELECTED'
+    if re.search('select\\s+(the\\s+)?time\\s+(equals|not)', t, re.IGNORECASE):
+        return 'TIME_SELECTED'
+    if re.search('edit\\s+your\\s+review', t, re.IGNORECASE):
+        return 'REVIEW_EDITED'
+    if re.search('delete\\s+your\\s+review', t, re.IGNORECASE):
+        return 'REVIEW_DELETED'
+    if re.search('book\\s+a\\s+table', t, re.IGNORECASE):
+        return 'BOOK_RESTAURANT'
+    if re.search('(complete|finalize|finish)\\s+.*reservation', t, re.IGNORECASE):
+        return 'RESERVATION_COMPLETE'
+    if re.search('open\\s+the\\s+contact\\s+page', t, re.IGNORECASE):
+        return 'CONTACT_PAGE_VIEW'
     if re.search('search\\s+for\\s+restaurants?\\s+where\\s+the\\s+query', t, re.IGNORECASE):
         return 'SEARCH_RESTAURANT'
     if re.search('(please\\s+)?collapse\\s+the\\s+(expanded\\s+)?menu(\\s+view)?', t, re.IGNORECASE):
@@ -439,6 +509,10 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'VIEW_RESTAURANT'
     if re.search('show\\s+details\\s+for\\s+(a|the)\\s+restaurant', t, re.IGNORECASE):
         return 'VIEW_RESTAURANT'
+    if re.search('search\\s+for\\s+(?!hotels?|restaurants?|doctors?|emails?|books?|movies?|films?|matters?|clients?|jobs?|users?|the\\s+book)\\w+', t, re.IGNORECASE):
+        return 'SEARCH_PRODUCT'
+    if re.search('(expand|collapse)\\s+(the\\s+)?.*section|explore\\s+further', t, re.IGNORECASE):
+        return 'DETAILS_TOGGLE'
     if re.search('update\\s+quantity\\s+of\\s+item\\s+with\\s+title', t, re.IGNORECASE):
         return 'QUANTITY_CHANGED'
     if re.search('update\\s+the\\s+quantity\\s+of\\s+the\\s+item\\s+in\\s+my\\s+cart', t, re.IGNORECASE):
@@ -467,6 +541,16 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'ADD_TO_WISHLIST'
     if re.search('(show|view)\\s+my\\s+shopping\\s+cart', t, re.IGNORECASE):
         return 'VIEW_CART'
+    if re.search('search\\s+for\\s+clients?\\s+where\\s+the\\s+query', t, re.IGNORECASE):
+        return 'SEARCH_CLIENT'
+    if re.search('add\\s+(a\\s+)?new\\s+log\\s+(entry\\s+)?where', t, re.IGNORECASE):
+        return 'NEW_LOG_ADDED'
+    if re.search('delete\\s+the\\s+log\\s+(entry\\s+)?where', t, re.IGNORECASE):
+        return 'LOG_DELETE'
+    if re.search('delete\\s+the\\s+client\\s+where', t, re.IGNORECASE):
+        return 'DELETE_CLIENT'
+    if re.search('update\\s+the\\s+matter\\s+where', t, re.IGNORECASE):
+        return 'UPDATE_MATTER'
     if re.search('add\\s+a\\s+new\\s+client', t, re.IGNORECASE):
         return 'ADD_CLIENT'
     if re.search('add\\s+a\\s+new\\s+matter', t, re.IGNORECASE):
