@@ -20,7 +20,7 @@ class LLMClient:
         self.model = LLM_MODEL
         self.temperature = LLM_TEMPERATURE
         self.max_tokens = LLM_MAX_TOKENS
-        self._client = httpx.Client(timeout=20.0)
+        self._client = httpx.Client(timeout=25.0)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=2.0), retry=retry_if_exception(_is_retryable))
     def chat(self, task_id: str, messages: list[dict]) -> str:

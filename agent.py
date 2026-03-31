@@ -14,7 +14,6 @@ from llm_prompts import build_system_prompt, build_user_prompt, format_evaluator
 from action_builder import parse_llm_response, build_iwa_action, is_tool_request, is_valid_action
 from tools import run_tool, tool_list_cards
 WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
-STEP_CAP = 10
 _llm_client = None
 
 def get_llm_client() -> LLMClient:
@@ -34,9 +33,6 @@ def smart_fallback(candidates: list, step: int, url: str, task_id: str) -> list[
 async def handle_act(task_id: str | None, prompt: str | None, url: str | None, snapshot_html: str | None, screenshot: str | None, step_index: int | None, web_project_id: str | None, history: list[dict] | None=None) -> list[dict]:
     step = step_index or 0
     task = task_id or 'unknown'
-    if step_index is not None and step_index >= STEP_CAP:
-        logger.info(f'Step cap reached ({step_index} >= {STEP_CAP}), returning empty actions')
-        return []
     if not prompt or not url:
         logger.warning('Missing prompt or url, returning WaitAction')
         return [WAIT_ACTION]
@@ -51,9 +47,6 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
             if c.operator == 'equals' and isinstance(c.value, str):
                 state.credentials.setdefault(c.field, c.value)
         TaskStateTracker._auto_cleanup(max_kept=5)
-    if step > 0 and TaskStateTracker.count_consecutive_wait_actions(task) >= 2:
-        logger.info('OJO-05: 2+ consecutive WaitActions, returning empty actions (done)')
-        return []
     quick_actions = try_quick_click(prompt, url, seed, step)
     if quick_actions is not None:
         logger.info(f'Quick click resolved: {len(quick_actions)} actions')
@@ -186,9 +179,6 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
     if not last_decision or not isinstance(last_decision, dict):
         return smart_fallback(candidates, step, url, task)
     action = build_iwa_action(last_decision, candidates, url, seed)
-    if isinstance(action, list) and len(action) == 0:
-        logger.info('LLM signaled done -- returning empty actions for early exit')
-        return []
     if action.get('type') == '__invalid__':
         return smart_fallback(candidates, step, url, task)
     action_type = action.get('type', 'unknown')

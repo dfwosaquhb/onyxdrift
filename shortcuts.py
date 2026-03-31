@@ -17,12 +17,23 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
         return _click_action('id', 'new-event-cta')
     if re.search('click.*add\\s+team|add\\s+team\\s+button', t):
         return _click_action('id', 'add-team-btn')
+    if re.search('(show|view|go\\s+to).*\\b(shopping\\s+)?cart\\b', t):
+        from urllib.parse import urlsplit
+        _port = urlsplit(url).port
+        if _port and seed:
+            return [{'type': 'NavigateAction', 'url': f'http://localhost:{_port}/cart?seed={seed}'}]
     if re.search('(show\\s+me\\s+my\\s+saved|my\\s+wishlist|show.*wishlist|view.*wishlist)', t):
+        from urllib.parse import urlsplit
+        _port = urlsplit(url).port
+        if _port and seed:
+            return [{'type': 'NavigateAction', 'url': f'http://localhost:{_port}/wishlist?seed={seed}'}]
         return _click_action('id', 'save-item')
     if re.search('change\\s+the\\s+application\\s+theme', t):
         return _click_action('id', 'theme-dark-btn')
     if re.search('clicks?\\s+on\\s+the\\s+jobs?\\s+option\\s+in\\s+the\\s+navbar', t):
         return _click_action('href', f'/jobs?seed={seed}') if seed else None
+    if re.search('clicks?\\s+on\\s+the\\s+hires?\\s+option\\s+in\\s+the\\s+navbar', t):
+        return _click_action('href', f'/hires?seed={seed}') if seed else None
     if re.search('clicks?\\s+on\\s+.*profile\\s+.*in\\s+the\\s+navbar', t):
         return _click_action('href', f'/profile/alexsmith?seed={seed}') if seed else None
     if re.search('clicks?\\s+favorites?\\s+to\\s+view|open\\s+the\\s+favorites?\\s+section|navbar.*favorites?|favorites?.*navbar', t):
@@ -63,7 +74,7 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//input[contains(@aria-label,'calendar')])[1]"}}]
         return None
     return None
-_SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'filter-input'}
+_SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'filter-input', 'autobooks': 'input', 'autozone': 'input', 'autoconnect': 'input', 'autohealth': 'input'}
 
 def extract_search_query(prompt: str) -> str | None:
     from constraint_parser import parse_constraints

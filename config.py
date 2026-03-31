@@ -5,8 +5,8 @@ from website_hints import WEBSITE_HINTS
 PORT_TO_PROJECT: dict[int, str] = {8000: 'autocinema', 8001: 'autobooks', 8002: 'autozone', 8003: 'autodining', 8004: 'autocrm', 8005: 'automail', 8006: 'autodelivery', 8007: 'autolodge', 8008: 'autoconnect', 8009: 'autowork', 8010: 'autocalendar', 8011: 'autolist', 8012: 'autodrive', 8013: 'autohealth', 8014: 'autostats', 8015: 'autodiscord'}
 SELECTOR_PRIORITY: list[str] = ['id', 'data-testid', 'href', 'aria-label', 'name', 'placeholder', 'title', 'text']
 LLM_MODEL = 'gpt-4o-mini'
-LLM_TEMPERATURE = 0.2
-LLM_MAX_TOKENS = 350
+LLM_TEMPERATURE = 0.15
+LLM_MAX_TOKENS = 400
 PAGE_IR_MAX_TOKENS = 1600
 PAGE_IR_CHAR_LIMIT = PAGE_IR_MAX_TOKENS * 4
 

@@ -17,7 +17,7 @@ def format_evaluator_history(history: list[dict] | None, last_n: int=4) -> str:
     return '\n'.join(lines)
 
 def build_system_prompt() -> str:
-    return 'You are a web automation agent. Return JSON only (no markdown).\nKeys: action, candidate_id, text, url, evaluation_previous_goal, memory, next_goal.\naction: click|type|select|navigate|scroll_down|scroll_up|send_keys|done.\nclick/type/select: candidate_id=integer from BROWSER_STATE.\nnavigate: url=full URL (keep ?seed=X param).\ndone: only when task is fully completed.\nRULES: Copy values EXACTLY from TASK_CREDENTIALS/TASK_CONSTRAINTS (include trailing spaces).\nequals->type exact value. not_equals->use any OTHER value. contains->find item with that substring.\nnot_contains/not_in->find item WITHOUT that value. greater/less->numeric comparison.\nCREDENTIALS: username/email may have trailing spaces - type them exactly as shown in quotes.\njob_title_contains->type any title CONTAINING that substring.\nMULTI-STEP: complete login first, then the secondary action. Track progress in memory.\nsend_keys: keys=\'Enter\' to submit a form (works on focused element, no candidate_id needed).\nTOOLS: Return {"tool":"<name>","args":{...}} to inspect page. Max 2 tools per step.\nTools: list_cards({max_cards?,max_text?}); search_text({query}); list_links({}); extract_forms({}).'
+    return "You are a web automation agent. Return JSON only (no markdown).\nKeys: action, candidate_id, text, url, evaluation_previous_goal, memory, next_goal.\naction: click|type|select|navigate|scroll_down|scroll_up|send_keys|done.\nclick/type/select: candidate_id=integer from BROWSER_STATE.\nnavigate: url=full URL (keep ?seed=X param).\ndone: only when task is fully completed.\nRULES: Copy values EXACTLY from TASK_CREDENTIALS/TASK_CONSTRAINTS (include trailing spaces).\nequals->type exact value. not_equals->use any OTHER value. contains->find item with that substring.\nnot_contains/not_in->find item WITHOUT that value. greater/less->numeric comparison.\nCREDENTIALS: username/email may have trailing spaces - type them exactly as shown in quotes.\njob_title_contains->type any title CONTAINING that substring.\nMULTI-STEP: complete login first, then the secondary action. Track progress in memory.\nsend_keys: keys='Enter' to submit a form (works on focused element, no candidate_id needed).\n"
 
 def build_structured_hints(candidates: list) -> str:
     inputs = []
@@ -48,7 +48,7 @@ def build_credentials_block(credentials: dict[str, str]) -> str:
 def build_user_prompt(prompt: str, browser_state_text: str, step_index: int, website: str | None, website_hint: str='', constraints_block: str='', credentials_block: str='', playbook: str='', page_summary: str='', dom_digest_text: str='', cards_text: str='', structured_hints_text: str='', evaluator_history_text: str='', memory: str='', next_goal: str='', state_delta: str='', stuck_hint: str='', filled_fields_text: str='', action_history_text: str='', task_type: str | None=None, url: str | None=None, **kwargs) -> str:
     parts: list[str] = []
     parts.append(f'TASK: {prompt}')
-    parts.append(f"SITE:{website or 'unknown'} TYPE:{task_type or 'unknown'} STEP:{step_index} of 10 URL:{url or ''}")
+    parts.append(f"SITE:{website or 'unknown'} TYPE:{task_type or 'unknown'} STEP:{step_index} of 12 URL:{url or ''}")
     if website_hint:
         parts.append(f'\nSITE_HINTS: {website_hint[:150]}')
     if credentials_block:
@@ -76,6 +76,9 @@ def build_user_prompt(prompt: str, browser_state_text: str, step_index: int, web
     parts.append(f'\nMEMORY:\nPREVIOUS MEMORY: {memory}\nPREVIOUS NEXT_GOAL: {next_goal}')
     if state_delta:
         parts.append(f'\nDELTA: {state_delta[:200]}')
+    remaining_steps = 12 - step_index
+    if remaining_steps <= 3:
+        parts.append(f'\nWARNING: ONLY {remaining_steps} STEPS LEFT - take the most direct action NOW.')
     parts.append(f'\nBROWSER_STATE:\n{browser_state_text}')
     parts.append('\nChoose ONE action to make progress. Do NOT repeat previous actions that failed.')
     return '\n'.join(parts)

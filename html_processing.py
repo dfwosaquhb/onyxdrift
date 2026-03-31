@@ -7,7 +7,7 @@ from models import Candidate, Selector, PageContext, PageIR
 def _norm_ws(s: str) -> str:
     return re.sub('\\s+', ' ', s).strip()
 STRIP_TAGS = {'script', 'style', 'svg', 'noscript', 'iframe'}
-INTERACTIVE_CSS = "button, a[href], input:not([type='hidden']), textarea, select, [role='button'], [role='link']"
+INTERACTIVE_CSS = "button, a[href], input:not([type='hidden']), textarea, select, [role='button'], [role='link'], [role='tab'], [role='menuitem']"
 MAX_TEXT_LEN = 80
 
 def prune_html(html: str) -> BeautifulSoup:

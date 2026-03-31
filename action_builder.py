@@ -4,6 +4,7 @@ import re
 import logging
 logger = logging.getLogger(__name__)
 from models import Candidate
+from urllib.parse import urlsplit, urlunsplit
 from navigation import preserve_seed, is_localhost_url, normalize_url
 _WAIT_ACTION = {'type': 'WaitAction', 'time_seconds': 1}
 _INVALID_ACTION = {'type': '__invalid__'}
@@ -69,7 +70,7 @@ def parse_llm_response(content: str) -> dict | None:
 def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: str, seed: str | None) -> dict:
     action_type = decision.get('action', 'wait')
     if action_type == 'done':
-        return []
+        return {'type': 'IdleAction'}
     if action_type in ('click', 'type', 'select_option', 'select'):
         candidate_id = decision.get('candidate_id')
         if candidate_id is None or not isinstance(candidate_id, int):
@@ -82,7 +83,7 @@ def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: s
         selector_dict = candidate.selector.model_dump()
         if action_type == 'click':
             if candidate.href and _is_navigable_href(candidate.href):
-                from urllib.parse import urljoin, urlsplit
+                from urllib.parse import urljoin
                 full_url = urljoin(current_url, candidate.href)
                 if is_localhost_url(full_url):
                     final_url = preserve_seed(full_url, current_url)
@@ -98,6 +99,8 @@ def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: s
             return {'type': 'TypeAction', 'text': text, 'selector': selector_dict}
         if action_type in ('select_option', 'select'):
             text = decision.get('text', '')
+            if not text and candidate.options:
+                text = candidate.options[0]
             return {'type': 'SelectDropDownOptionAction', 'text': text, 'selector': selector_dict}
     if action_type == 'navigate':
         url = decision.get('url', '')
@@ -107,8 +110,13 @@ def build_iwa_action(decision: dict, candidates: list[Candidate], current_url: s
         if not is_localhost_url(url):
             logger.warning(f'Blocked non-localhost navigate: {url}')
             return _INVALID_ACTION
+        target_parts = urlsplit(url)
+        if target_parts.port is None:
+            current_parts = urlsplit(current_url)
+            if current_parts.port:
+                new_netloc = f'{target_parts.hostname}:{current_parts.port}'
+                url = urlunsplit((target_parts.scheme, new_netloc, target_parts.path, target_parts.query, target_parts.fragment))
         final_url = preserve_seed(url, current_url)
-        from urllib.parse import urlsplit
         current_parts = urlsplit(current_url)
         final_parts = urlsplit(final_url)
         if current_parts.path == final_parts.path and current_parts.query == final_parts.query:
