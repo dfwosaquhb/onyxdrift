@@ -18,16 +18,9 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if re.search('click.*add\\s+team|add\\s+team\\s+button', t):
         return _click_action('id', 'add-team-btn')
     if re.search('(show|view|go\\s+to).*\\b(shopping\\s+)?cart\\b', t):
-        from urllib.parse import urlsplit
-        _port = urlsplit(url).port
-        if _port and seed:
-            return [{'type': 'NavigateAction', 'url': f'http://localhost:{_port}/cart?seed={seed}'}]
+        return _click_action('href', f'/cart?seed={seed}') if seed else None
     if re.search('(show\\s+me\\s+my\\s+saved|my\\s+wishlist|show.*wishlist|view.*wishlist)', t):
-        from urllib.parse import urlsplit
-        _port = urlsplit(url).port
-        if _port and seed:
-            return [{'type': 'NavigateAction', 'url': f'http://localhost:{_port}/wishlist?seed={seed}'}]
-        return _click_action('id', 'save-item')
+        return _click_action('href', f'/wishlist?seed={seed}') if seed else None
     if re.search('change\\s+the\\s+application\\s+theme', t):
         return _click_action('id', 'theme-dark-btn')
     if re.search('clicks?\\s+on\\s+the\\s+jobs?\\s+option\\s+in\\s+the\\s+navbar', t):

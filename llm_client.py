@@ -20,15 +20,15 @@ class LLMClient:
         self.model = LLM_MODEL
         self.temperature = LLM_TEMPERATURE
         self.max_tokens = LLM_MAX_TOKENS
-        self._client = httpx.Client(timeout=25.0)
+        self._client = httpx.AsyncClient(timeout=25.0)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=2.0), retry=retry_if_exception(_is_retryable))
-    def chat(self, task_id: str, messages: list[dict]) -> str:
+    async def chat(self, task_id: str, messages: list[dict]) -> str:
         headers = {'Content-Type': 'application/json', 'IWA-Task-ID': task_id}
         if self.api_key:
             headers['Authorization'] = f'Bearer {self.api_key}'
         body = {'model': self.model, 'messages': messages, 'temperature': self.temperature, 'max_tokens': self.max_tokens}
-        resp = self._client.post(f'{self.base_url}/chat/completions', json=body, headers=headers)
+        resp = await self._client.post(f'{self.base_url}/chat/completions', json=body, headers=headers)
         resp.raise_for_status()
         data = resp.json()
         return data['choices'][0]['message']['content']

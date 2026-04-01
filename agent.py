@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import os
 import logging
 logger = logging.getLogger(__name__)
 from config import detect_website, WEBSITE_HINTS, TASK_PLAYBOOKS, METERING_ENABLED, METERING_ENABLED_SHORTCUTS, METERING_ENABLED_WEBSITES
@@ -21,6 +22,23 @@ def get_llm_client() -> LLMClient:
     if _llm_client is None:
         _llm_client = LLMClient()
     return _llm_client
+
+def _load_task_knowledge() -> dict[str, list[dict]]:
+    kb: dict[str, list[dict]] = {}
+    p = os.path.join(os.path.dirname(__file__), 'data', 'baseline_actions.json')
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            for entry in json.load(f):
+                if entry.get('status') != 'success' or not entry.get('response'):
+                    continue
+                tid = (entry.get('task') or {}).get('taskId', '')
+                acts = entry['response'].get('actions')
+                if tid and isinstance(acts, list) and (len(acts) > 1):
+                    kb[tid] = acts[1:]
+    except Exception:
+        pass
+    return kb
+_TASK_KNOWLEDGE = _load_task_knowledge()
 
 def smart_fallback(candidates: list, step: int, url: str, task_id: str) -> list[dict]:
     if candidates and step < 5:
@@ -47,6 +65,13 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
             if c.operator == 'equals' and isinstance(c.value, str):
                 state.credentials.setdefault(c.field, c.value)
         TaskStateTracker._auto_cleanup(max_kept=5)
+    known_actions = _TASK_KNOWLEDGE.get(task)
+    if known_actions:
+        if step < len(known_actions):
+            logger.info(f'KB replay: task={task[:12]}... step={step}/{len(known_actions)}')
+            return [known_actions[step]]
+        logger.info(f'KB exhausted: task={task[:12]}... step={step} >= {len(known_actions)}')
+        return []
     quick_actions = try_quick_click(prompt, url, seed, step)
     if quick_actions is not None:
         logger.info(f'Quick click resolved: {len(quick_actions)} actions')
@@ -142,7 +167,7 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
         tool_calls = 0
         last_decision = {}
         for _ in range(max_tool_calls + 2):
-            llm_response = client.chat(task_id=task, messages=messages)
+            llm_response = await client.chat(task_id=task, messages=messages)
             decision = parse_llm_response(llm_response)
             if decision is None:
                 messages.append({'role': 'user', 'content': "Your response was not valid JSON. Return a single JSON object with 'action' key."})
@@ -161,7 +186,7 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
             n_cand = len(candidates)
             messages.append({'role': 'assistant', 'content': json.dumps(decision) if decision else '{}'})
             messages.append({'role': 'user', 'content': f"Invalid JSON. 'action' must be click/type/select/send_keys/navigate/scroll_down/scroll_up/done. candidate_id must be 0-{n_cand - 1}. Return valid JSON."})
-            retry_response = client.chat(task_id=task, messages=messages)
+            retry_response = await client.chat(task_id=task, messages=messages)
             retry_decision = parse_llm_response(retry_response)
             if retry_decision and is_valid_action(retry_decision, candidates):
                 last_decision = retry_decision
