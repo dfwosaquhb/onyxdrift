@@ -72,7 +72,7 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
             return [known_actions[step]]
         logger.info(f'KB exhausted: task={task[:12]}... step={step} >= {len(known_actions)}')
         return []
-    quick_actions = try_quick_click(prompt, url, seed, step)
+    quick_actions = try_quick_click(prompt, url, seed, step, website=website)
     if quick_actions is not None:
         logger.info(f'Quick click resolved: {len(quick_actions)} actions')
         for (i, qa) in enumerate(quick_actions):
@@ -82,7 +82,7 @@ async def handle_act(task_id: str | None, prompt: str | None, url: str | None, s
                 sel_val = sel.get('value', '')
             TaskStateTracker.record_action(task, qa.get('type', ''), sel_val, url, step + i)
         return quick_actions
-    search_actions = try_search_shortcut(prompt, website)
+    search_actions = try_search_shortcut(prompt, website, seed=seed)
     if search_actions is not None:
         logger.info(f'Search shortcut resolved: {len(search_actions)} actions')
         for (i, sa) in enumerate(search_actions):

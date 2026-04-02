@@ -2,6 +2,7 @@ from __future__ import annotations
 import re
 from bs4 import BeautifulSoup
 from models import Candidate
+from v3 import v3_id
 
 def _sel_attr(attribute: str, value: str) -> dict:
     return {'type': 'attributeValueSelector', 'attribute': attribute, 'value': value, 'case_sensitive': False}
@@ -9,36 +10,36 @@ def _sel_attr(attribute: str, value: str) -> dict:
 def _click_action(attribute: str, value: str) -> list[dict]:
     return [{'type': 'ClickAction', 'selector': _sel_attr(attribute, value)}]
 
-def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[dict] | None:
+def try_quick_click(prompt: str, url: str, seed: str | None, step: int, website: str | None=None) -> list[dict] | None:
     t = prompt.lower()
     if re.search('go\\s+to\\s+today|focus.*today|today.?s?\\s+date\\s+in\\s+the\\s+calendar', t):
-        return _click_action('id', 'focus-today')
+        return _click_action('id', v3_id(seed, website, 'nav-today-btn'))
     if re.search('add\\s+a\\s+new\\s+calendar\\s+event|add\\s+calendar\\s+button|click.*add\\s+calendar', t):
-        return _click_action('id', 'new-event-cta')
+        return _click_action('id', v3_id(seed, website, 'sidebar-cta'))
     if re.search('click.*add\\s+team|add\\s+team\\s+button', t):
-        return _click_action('id', 'add-team-btn')
+        return _click_action('id', v3_id(seed, website, 'add-team-button'))
     if re.search('(show|view|go\\s+to).*\\b(shopping\\s+)?cart\\b', t):
         return _click_action('href', f'/cart?seed={seed}') if seed else None
     if re.search('(show\\s+me\\s+my\\s+saved|my\\s+wishlist|show.*wishlist|view.*wishlist)', t):
         return _click_action('href', f'/wishlist?seed={seed}') if seed else None
     if re.search('change\\s+the\\s+application\\s+theme', t):
         return _click_action('id', 'theme-dark-btn')
-    if re.search('clicks?\\s+on\\s+the\\s+jobs?\\s+option\\s+in\\s+the\\s+navbar', t):
+    if re.search('clicks?\\s+(?:on\\s+)?(?:the\\s+)?[\'\\"]?jobs?[\'\\"]?\\s+(?:option\\s+|section\\s+)?(?:in|from)\\s+the\\s+navbar', t):
         return _click_action('href', f'/jobs?seed={seed}') if seed else None
-    if re.search('clicks?\\s+on\\s+the\\s+hires?\\s+option\\s+in\\s+the\\s+navbar', t):
+    if re.search('clicks?\\s+(?:on\\s+)?(?:the\\s+)?[\'\\"]?hires?[\'\\"]?\\s+(?:option\\s+|section\\s+)?(?:in|from)\\s+the\\s+navbar|open\\s+the\\s+hires?\\s+section', t):
         return _click_action('href', f'/hires?seed={seed}') if seed else None
-    if re.search('clicks?\\s+on\\s+.*profile\\s+.*in\\s+the\\s+navbar', t):
+    if re.search('clicks?\\s+(?:on\\s+)?(?:the\\s+)?.*profile\\s+.*(?:in|from)\\s+the\\s+navbar', t):
         return _click_action('href', f'/profile/alexsmith?seed={seed}') if seed else None
     if re.search('clicks?\\s+favorites?\\s+to\\s+view|open\\s+the\\s+favorites?\\s+section|navbar.*favorites?|favorites?.*navbar', t):
         return _click_action('href', f'/favorites?seed={seed}') if seed else None
     if re.search('clicks?\\s+hire\\s+later\\s+to\\s+view|open\\s+the\\s+hire\\s+later\\s+section|navbar.*hire.?later|hire.?later.*navbar', t):
         return _click_action('href', f'/hire-later?seed={seed}') if seed else None
     if re.search('(spotlight|featured)\\s+.*(?:movie|film).*details|view\\s+details\\s+.*(?:spotlight|featured)\\s+(?:movie|film)', t):
-        return _click_action('id', 'spotlight-view-details-btn')
+        return _click_action('id', v3_id(seed, website, 'spotlight-view-details-btn'))
     if re.search('(spotlight|featured)\\s+.*book.*details|view\\s+details\\s+.*(?:featured|spotlight)\\s+book', t):
         return _click_action('id', 'featured-book-view-details-btn-1')
     if re.search('(spotlight|featured)\\s+.*product.*details|view\\s+details\\s+.*(?:featured|spotlight)\\s+product', t):
-        return _click_action('id', 'view-details')
+        return _click_action('id', v3_id(seed, website, 'view-details-btn'))
     from urllib.parse import urlsplit
     _port = urlsplit(url).port
     if _port == 8008 and re.search('go\\s+to\\s+the\\s+home\\s+tab|home\\s+tab\\s+from\\s+the\\s+navbar', t):
@@ -50,14 +51,16 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if re.search('clear\\s+(the\\s+)?(current\\s+)?selection', t):
         return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//button[@role='checkbox'])[1]"}}]
     if re.search('open\\s+the\\s+contact\\s+page', t):
-        return _click_action('id', 'nav-contact')
+        return _click_action('id', v3_id(seed, website, 'nav-contact'))
     if re.search('about\\s+page.*feature|feature.*about\\s+page', t):
         if step == 0:
-            return _click_action('id', 'nav-about')
+            return _click_action('id', v3_id(seed, website, 'nav-about'))
         elif step == 1:
             return [{'type': 'ScrollAction', 'down': True}]
         else:
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "//h3[contains(text(),'Curated')]"}}]
+    if 'feature' not in t and re.search('(navigate|go|open|view)\\s+(?:to\\s+)?(?:the\\s+)?about\\s+page', t):
+        return _click_action('id', v3_id(seed, website, 'nav-about'))
     if re.search('go\\s+back\\s+to\\s+(the\\s+)?(all\\s+)?hotels|return\\s+to\\s+.*hotel\\s+(dashboard|listing)', t):
         return [{'type': 'ClickAction', 'selector': {'type': 'tagContainsSelector', 'value': 'All Hotels'}}]
     if re.search('select\\s+(the\\s+)?calendar\\s+(whose|where|that|named)', t):
@@ -67,7 +70,7 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
             return [{'type': 'ClickAction', 'selector': {'type': 'xpathSelector', 'value': "(//input[contains(@aria-label,'calendar')])[1]"}}]
         return None
     return None
-_SEARCH_INPUT_IDS: dict[str, str] = {'automail': 'mail-search', 'autocinema': 'input', 'autodining': 'search-field', 'autodelivery': 'filter-input', 'autobooks': 'input', 'autozone': 'input', 'autoconnect': 'input', 'autohealth': 'input'}
+_SEARCH_V3_KEYS: dict[str, str] = {'automail': 'search_input', 'autocinema': 'input', 'autodining': 'search-input', 'autodelivery': 'search-input', 'autobooks': 'search-input', 'autozone': 'search-input', 'autoconnect': 'search-input'}
 
 def extract_search_query(prompt: str) -> str | None:
     from constraint_parser import parse_constraints
@@ -80,12 +83,16 @@ def extract_search_query(prompt: str) -> str | None:
         return m.group(1)
     return None
 
-def try_search_shortcut(prompt: str, website: str | None) -> list[dict] | None:
+def try_search_shortcut(prompt: str, website: str | None, seed: str | None=None) -> list[dict] | None:
     if not website:
         return None
-    input_id = _SEARCH_INPUT_IDS.get(website)
-    if input_id is None:
-        return None
+    if website == 'autohealth':
+        input_id = 'doctor-name-search'
+    else:
+        v3_key = _SEARCH_V3_KEYS.get(website)
+        if v3_key is None:
+            return None
+        input_id = v3_id(seed, website, v3_key)
     query = extract_search_query(prompt)
     if not query:
         return None
@@ -227,7 +234,7 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'CANCEL_ADD_EVENT'
     if re.search('open\\s+the\\s+event\\s+creation\\s+wizard', t, re.IGNORECASE):
         return 'EVENT_WIZARD_OPEN'
-    if re.search('click\\s+on\\s+cell\\s+for\\s+a\\s+date', t, re.IGNORECASE):
+    if re.search('click\\s+on\\s+(?:the\\s+)?cell\\s+for\\s+a\\s+date', t, re.IGNORECASE):
         return 'CELL_CLICKED'
     if re.search('click.*cell.*in\\s+the\\s+5\\s+days\\s+view', t, re.IGNORECASE):
         return 'CELL_CLICKED'
@@ -245,11 +252,11 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'AUTOLIST_TEAM_ROLE_ASSIGNED'
     if re.search('edit\\s+task\\s+modal\\s+open', t, re.IGNORECASE):
         return 'AUTOLIST_EDIT_TASK_MODAL_OPENED'
-    if re.search('button\\s+to\\s+add\\s+a\\s+task\\s+is\\s+clicked', t, re.IGNORECASE):
+    if re.search('button\\s+to\\s+(?:add|create)\\s+a\\s+task\\s+is\\s+clicked', t, re.IGNORECASE):
         return 'AUTOLIST_ADD_TASK_CLICKED'
-    if re.search('change\\s+the\\s+priority\\s+to', t, re.IGNORECASE):
+    if re.search('(?:change|set)\\s+the\\s+priority\\s+to', t, re.IGNORECASE):
         return 'AUTOLIST_SELECT_TASK_PRIORITY'
-    if re.search('cancel\\s+creating\\s+the\\s+task', t, re.IGNORECASE):
+    if re.search('cancel\\s+creating\\s+(?:the|a)\\s+task', t, re.IGNORECASE):
         return 'AUTOLIST_CANCEL_TASK_CREATION'
     if re.search('create\\s+a\\s+team\\s+whose', t, re.IGNORECASE):
         return 'AUTOLIST_TEAM_CREATED'
@@ -387,9 +394,9 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'CHOOSE_PROJECT_SIZE'
     if re.search('closing\\s+the\\s+job\\s+posting\\s+window', t, re.IGNORECASE):
         return 'CLOSE_POST_A_JOB_WINDOW'
-    if re.search('clicks?\\s+on\\s+the\\s+jobs?\\s+option\\s+in\\s+the\\s+navbar', t, re.IGNORECASE):
+    if re.search('clicks?\\s+(?:on\\s+)?(?:the\\s+)?[\'\\"]?jobs?[\'\\"]?\\s+(?:option\\s+|section\\s+)?(?:in|from)\\s+the\\s+navbar', t, re.IGNORECASE):
         return 'NAVBAR_JOBS_CLICK'
-    if re.search('clicks?\\s+on\\s+.?hires?.?\\s+from\\s+the\\s+navbar', t, re.IGNORECASE):
+    if re.search('clicks?\\s+(?:on\\s+)?(?:the\\s+)?[\'\\"]?hires?[\'\\"]?\\s+(?:option\\s+|section\\s+)?(?:in|from)\\s+the\\s+navbar|open\\s+the\\s+hires?\\s+section', t, re.IGNORECASE):
         return 'NAVBAR_HIRES_CLICK'
     if re.search('searches?\\s+for\\s+a\\s+skill', t, re.IGNORECASE):
         return 'SEARCH_SKILL'
@@ -618,7 +625,7 @@ def classify_task_type(prompt: str, website: str | None=None, url: str | None=No
         return 'SEARCH_FILM'
     if re.search('click\\s+on\\s+buy\\s+now\\s+to\\s+initiate\\s+checkout', t, re.IGNORECASE):
         return 'CHECKOUT_STARTED'
-    if re.search('navigate\\s+to\\s+the\\s+about\\s+page', t, re.IGNORECASE):
+    if re.search('(navigate|go|open|view)\\s+(?:to\\s+)?(?:the\\s+)?about\\s+page', t, re.IGNORECASE):
         return 'ABOUT_PAGE_VIEW'
     if re.search('open\\s+the\\s+date\\s+selector', t, re.IGNORECASE):
         return 'DATE_DROPDOWN_OPENED'
